@@ -88,7 +88,10 @@ def discover_style_config(start: Path) -> dict | None:
         candidate = directory / STYLE_FILENAME
         if candidate.is_file():
             with open(candidate, "rb") as f:
-                return tomllib.load(f).get("style", {})
+                try:
+                    return tomllib.load(f).get("style", {})
+                except tomllib.TOMLDecodeError as exc:
+                    raise ValueError(f"invalid TOML in {candidate}: {exc}") from exc
     return None
 
 

@@ -1,3 +1,5 @@
+import pytest
+
 from imagegen_core import apply_style, discover_style_config
 
 
@@ -31,3 +33,9 @@ def test_apply_style_none_passthrough():
 
 def test_apply_style_partial():
     assert apply_style("x", {"suffix": "warm light"}) == "x, warm light"
+
+
+def test_malformed_toml_raises_actionable_error(tmp_path):
+    (tmp_path / "imagegen.toml").write_text("[style\nprefix =")
+    with pytest.raises(ValueError, match="imagegen.toml"):
+        discover_style_config(tmp_path)
