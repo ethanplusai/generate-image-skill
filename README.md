@@ -5,7 +5,7 @@
 <h1 align="center">generate-image-skill</h1>
 
 <p align="center">
-  <strong>Give your coding agent the power to generate its own images — locally, free, no API keys.</strong>
+  <strong>Give your coding agent the power to generate its own images — locally, free, no API keys required.</strong>
 </p>
 
 <p align="center">
