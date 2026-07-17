@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from imagegen_core import (
+    SUPPORTED_EXTENSIONS,
     Job,
     apply_style,
     discover_style_config,
@@ -87,26 +88,41 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
 
-    if args.batch:
-        jobs = parse_manifest(Path(args.batch))
-    elif args.prompt:
-        if not args.out or not args.size:
-            sys.exit("error: --out and --size are required with a prompt")
-        width, height = parse_size(args.size)
-        jobs = [
-            Job(
-                prompt=args.prompt,
-                out=Path(args.out),
-                width=width,
-                height=height,
-                seed=args.seed,
-                count=args.count,
-            )
-        ]
-    else:
-        sys.exit("error: provide a prompt or --batch manifest.json")
+    if args.count < 1:
+        sys.exit("error: --count must be at least 1")
+    if args.steps < 1:
+        sys.exit("error: --steps must be at least 1")
 
-    style = None if args.no_style else discover_style_config(Path.cwd())
+    try:
+        if args.batch:
+            jobs = parse_manifest(Path(args.batch))
+        elif args.prompt:
+            if not args.out or not args.size:
+                sys.exit("error: --out and --size are required with a prompt")
+            width, height = parse_size(args.size)
+            jobs = [
+                Job(
+                    prompt=args.prompt,
+                    out=Path(args.out),
+                    width=width,
+                    height=height,
+                    seed=args.seed,
+                    count=args.count,
+                )
+            ]
+        else:
+            sys.exit("error: provide a prompt or --batch manifest.json")
+
+        for job in jobs:
+            if job.out.suffix.lower() not in SUPPORTED_EXTENSIONS:
+                raise ValueError(
+                    f"unsupported output format {job.out.suffix!r} for {job.out}: "
+                    "use .webp, .png, or .jpg"
+                )
+
+        style = None if args.no_style else discover_style_config(Path.cwd())
+    except (ValueError, OSError) as exc:
+        sys.exit(f"error: {exc}")
     plans = []
     for job in jobs:
         job.prompt = apply_style(job.prompt, style)

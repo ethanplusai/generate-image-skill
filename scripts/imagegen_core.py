@@ -16,6 +16,8 @@ MULTIPLE = 16
 WEBP_QUALITY = 82
 JPEG_QUALITY = 88
 
+SUPPORTED_EXTENSIONS = (".webp", ".jpg", ".jpeg", ".png")
+
 
 def parse_size(value: str) -> tuple[int, int]:
     match = re.fullmatch(r"(\d+)x(\d+)", value.strip().lower())
@@ -63,7 +65,7 @@ def finalize_image(img: Image.Image, width: int, height: int) -> Image.Image:
 
 def save_image(img: Image.Image, path: Path) -> None:
     ext = path.suffix.lower()
-    if ext not in (".webp", ".jpg", ".jpeg", ".png"):
+    if ext not in SUPPORTED_EXTENSIONS:
         raise ValueError(
             f"unsupported output format {ext!r}: use .webp, .png, or .jpg"
         )
