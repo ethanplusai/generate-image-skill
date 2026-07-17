@@ -1,0 +1,16 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15 # Apple Silicon runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Unit tests (no model)
+        run: uvx --with pillow pytest tests/ -v
+      - name: CLI dry-run (no model)
+        run: uv run scripts/generate.py "ci smoke" --out /tmp/ci.webp --size 640x400 --dry-run
