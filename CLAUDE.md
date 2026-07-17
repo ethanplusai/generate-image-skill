@@ -19,8 +19,8 @@ overview and `SKILL.md` for the agent-facing instructions.
 - `scripts/generate.py` — the CLI. PEP 723 inline deps (`mflux==0.18.0`). Dispatches
   to a backend; `--dry-run` never loads mflux.
 - `scripts/backends.py` — generation backends behind one `generate(...)` interface:
-  `LocalBackend` (mflux, lazy-imported) and hosted backends `ReplicateBackend`
-  and `OpenAIBackend` (stdlib `urllib`). Providers are registered in the
+  `LocalBackend` (mflux, lazy-imported) and hosted backends `ReplicateBackend`,
+  `OpenAIBackend`, and `GeminiBackend` (stdlib `urllib`). Providers are registered in the
   `HOSTED_BACKENDS` map — add a class + one entry to add a provider. Pure helpers
   (payload builders, response parsers, size selection) are unit-tested; the live
   hosted HTTP paths are not (they bill real accounts).

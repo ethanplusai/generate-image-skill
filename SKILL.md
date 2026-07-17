@@ -79,7 +79,7 @@ generator also exits with a clear message on unsupported platforms.
 | `--model REPO` | Override the HF model repo (advanced; default is the pinned 4-bit schnell) |
 | `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}` — loads the model once for all jobs |
 | `--no-style` | Ignore the project's `imagegen.toml` |
-| `--backend` | `local` (default, free/offline) or a hosted provider: `replicate`, `openai` |
+| `--backend` | `local` (default, free/offline) or a hosted provider: `replicate`, `openai`, `gemini` |
 | `--open` | Open each result in the Mac's default viewer after saving |
 | `--dry-run` | Print the plan (styled prompts, sizes, seeds) without loading the model |
 
@@ -87,8 +87,9 @@ generator also exits with a clear message on unsupported platforms.
 
 Local generation is the default and needs no key. If the user wants to offload
 compute to a hosted service (or isn't on a capable Mac), there are opt-in hosted
-backends. Two ship built in: `replicate` (the same flux-schnell model) and
-`openai` (gpt-image-1). More can be added in `scripts/backends.py`.
+backends. Three ship built in: `replicate` (the same flux-schnell model),
+`openai` (gpt-image-1), and `gemini` (gemini-2.5-flash-image). More can be added
+in `scripts/backends.py`.
 
 **The key is stored safely, and you (the agent) must never handle it:**
 

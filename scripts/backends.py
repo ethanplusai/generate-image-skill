@@ -23,6 +23,12 @@ import urllib.request
 
 from PIL import Image
 
+def _closest_ratio(width: int, height: int, ratios: dict) -> str:
+    """Pick the supported aspect-ratio string closest to width/height."""
+    target = width / height
+    return min(ratios, key=lambda ratio: abs(ratios[ratio] - target))
+
+
 # Aspect ratios the hosted flux-schnell model accepts, mapped to width/height.
 REPLICATE_ASPECT_RATIOS = {
     "1:1": 1 / 1,
@@ -40,12 +46,7 @@ REPLICATE_ASPECT_RATIOS = {
 
 
 def nearest_aspect_ratio(width: int, height: int) -> str:
-    """Pick the supported aspect-ratio string closest to width/height."""
-    target = width / height
-    return min(
-        REPLICATE_ASPECT_RATIOS,
-        key=lambda ratio: abs(REPLICATE_ASPECT_RATIOS[ratio] - target),
-    )
+    return _closest_ratio(width, height, REPLICATE_ASPECT_RATIOS)
 
 
 def replicate_payload(prompt: str, width: int, height: int, seed: int, steps: int) -> dict:
@@ -229,12 +230,90 @@ class OpenAIBackend:
         return Image.open(io.BytesIO(raw)).convert("RGB")
 
 
+# Aspect ratios the Gemini image model accepts.
+GEMINI_ASPECT_RATIOS = {
+    "1:1": 1 / 1,
+    "16:9": 16 / 9,
+    "9:16": 9 / 16,
+    "4:3": 4 / 3,
+    "3:4": 3 / 4,
+    "3:2": 3 / 2,
+    "2:3": 2 / 3,
+    "5:4": 5 / 4,
+    "4:5": 4 / 5,
+    "21:9": 21 / 9,
+}
+
+
+def nearest_gemini_aspect_ratio(width: int, height: int) -> str:
+    return _closest_ratio(width, height, GEMINI_ASPECT_RATIOS)
+
+
+def gemini_payload(prompt: str, width: int, height: int) -> dict:
+    return {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseModalities": ["IMAGE"],
+            "imageConfig": {"aspectRatio": nearest_gemini_aspect_ratio(width, height)},
+        },
+    }
+
+
+def parse_gemini_output(response: dict) -> bytes:
+    """Return the raw image bytes from a Gemini generateContent response."""
+    import base64
+
+    candidates = response.get("candidates")
+    if not candidates:
+        detail = response.get("promptFeedback") or response.get("error") or response
+        raise ValueError(f"Gemini returned no image: {detail}")
+    parts = candidates[0].get("content", {}).get("parts", [])
+    for part in parts:
+        inline = part.get("inlineData") or part.get("inline_data")
+        if inline and inline.get("data"):
+            return base64.b64decode(inline["data"])
+    raise ValueError("Gemini response contained no inline image data")
+
+
+class GeminiBackend:
+    name = "gemini"
+    MODEL = "gemini-2.5-flash-image"
+    ENDPOINT = (
+        "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    )
+
+    def __init__(self, api_key: str):
+        self._key = api_key
+
+    def _post(self, payload: dict) -> dict:
+        request = urllib.request.Request(
+            self.ENDPOINT.format(model=self.MODEL),
+            data=json.dumps(payload).encode(),
+            headers={
+                "x-goog-api-key": self._key,
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=180) as response:
+            return json.loads(response.read())
+
+    def generate(
+        self, prompt: str, width: int, height: int, seed: int, steps: int
+    ) -> Image.Image:
+        print("generating via Gemini...", flush=True)
+        response = self._post(gemini_payload(prompt, width, height))
+        raw = parse_gemini_output(response)
+        return Image.open(io.BytesIO(raw)).convert("RGB")
+
+
 # Each hosted provider maps to its backend class and the env-style help shown
 # when its key is missing. Add a provider by adding a class above and an entry
 # here — nothing else in the CLI needs to change.
 HOSTED_BACKENDS = {
     "replicate": ReplicateBackend,
     "openai": OpenAIBackend,
+    "gemini": GeminiBackend,
 }
 HOSTED_PROVIDERS = tuple(HOSTED_BACKENDS)
 

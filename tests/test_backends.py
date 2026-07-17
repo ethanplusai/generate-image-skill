@@ -3,13 +3,17 @@ import base64
 import pytest
 
 from backends import (
+    GeminiBackend,
     LocalBackend,
     OpenAIBackend,
     ReplicateBackend,
+    gemini_payload,
     get_backend,
     nearest_aspect_ratio,
+    nearest_gemini_aspect_ratio,
     nearest_openai_size,
     openai_payload,
+    parse_gemini_output,
     parse_openai_output,
     parse_replicate_output,
     replicate_payload,
@@ -118,6 +122,68 @@ def test_get_backend_openai_requires_key():
 def test_get_backend_openai_with_key():
     backend = get_backend("openai", model="m", base_model="schnell", api_key="sk-1")
     assert isinstance(backend, OpenAIBackend) and backend.name == "openai"
+
+
+def test_nearest_gemini_aspect_ratio_landscape():
+    assert nearest_gemini_aspect_ratio(1920, 1080) == "16:9"
+
+
+def test_nearest_gemini_aspect_ratio_square():
+    assert nearest_gemini_aspect_ratio(800, 800) == "1:1"
+
+
+def test_nearest_gemini_aspect_ratio_portrait():
+    assert nearest_gemini_aspect_ratio(800, 1200) == "2:3"
+
+
+def test_gemini_payload_shape():
+    payload = gemini_payload("a cat", 1440, 800)
+    assert payload["contents"][0]["parts"][0]["text"] == "a cat"
+    assert payload["generationConfig"]["responseModalities"] == ["IMAGE"]
+    assert payload["generationConfig"]["imageConfig"]["aspectRatio"] == "16:9"
+
+
+def test_parse_gemini_output_decodes_inline_data():
+    encoded = base64.b64encode(b"PNGDATA").decode()
+    response = {"candidates": [{"content": {"parts": [{"inlineData": {"data": encoded}}]}}]}
+    assert parse_gemini_output(response) == b"PNGDATA"
+
+
+def test_parse_gemini_output_accepts_snake_case():
+    encoded = base64.b64encode(b"X").decode()
+    response = {"candidates": [{"content": {"parts": [{"inline_data": {"data": encoded}}]}}]}
+    assert parse_gemini_output(response) == b"X"
+
+
+def test_parse_gemini_output_skips_text_parts():
+    encoded = base64.b64encode(b"IMG").decode()
+    response = {
+        "candidates": [
+            {"content": {"parts": [{"text": "here you go"}, {"inlineData": {"data": encoded}}]}}
+        ]
+    }
+    assert parse_gemini_output(response) == b"IMG"
+
+
+def test_parse_gemini_output_no_candidates_raises():
+    with pytest.raises(ValueError):
+        parse_gemini_output({"promptFeedback": {"blockReason": "SAFETY"}})
+
+
+def test_parse_gemini_output_no_image_raises():
+    response = {"candidates": [{"content": {"parts": [{"text": "no image"}]}}]}
+    with pytest.raises(ValueError):
+        parse_gemini_output(response)
+
+
+def test_get_backend_gemini_requires_key():
+    with pytest.raises(ValueError, match="--set-key gemini"):
+        get_backend("gemini", model="m", base_model="schnell", api_key=None)
+
+
+def test_get_backend_gemini_with_key():
+    backend = get_backend("gemini", model="m", base_model="schnell", api_key="sk-1")
+    assert isinstance(backend, GeminiBackend) and backend.name == "gemini"
 
 
 def test_get_backend_unknown_raises():

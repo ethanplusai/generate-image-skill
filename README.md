@@ -166,7 +166,7 @@ uv run scripts/generate.py --batch manifest.json
 | `--steps N` | Inference steps (default 4; rarely worth raising on schnell). |
 | `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}` — loads the model **once** for all jobs. |
 | `--no-style` | Ignore the project's `imagegen.toml`. |
-| `--backend NAME` | `local` (default, free/offline) or a hosted provider — `replicate`, `openai`. |
+| `--backend NAME` | `local` (default, free/offline) or a hosted provider — `replicate`, `openai`, `gemini`. |
 | `--open` | Open each result in the Mac's default image viewer after saving. |
 | `--dry-run` | Print the plan (styled prompts, sizes, seeds) without loading the model. |
 
@@ -198,6 +198,7 @@ own key.
 |---|---|---|
 | `replicate` | the **same** flux-schnell model, hosted | [replicate.com](https://replicate.com) |
 | `openai` | OpenAI `gpt-image-1` | [platform.openai.com](https://platform.openai.com) |
+| `gemini` | Google `gemini-2.5-flash-image` | [aistudio.google.com](https://aistudio.google.com/apikey) |
 
 **Your key is stored in the macOS Keychain, and a coding agent driving this
 tool never sees it.** You store it once, and the CLI retrieves it at run time —
