@@ -1,7 +1,7 @@
 <!-- orcha:managed:start v1 -->
 ## Recent Activity
 
-- **2h ago** — Built agentimagegen v1 end-to-end: spec → plan → implementation, merged to main ([2026-07-16-2314-build-agentimagegen-v1.md](.agents/sessions/2026-07-16-2314-build-agentimagegen-v1.md))
+- **3h ago** — Built agentimagegen v1 end-to-end: spec → plan → implementation, merged to main ([2026-07-16-2314-build-agentimagegen-v1.md](.agents/sessions/2026-07-16-2314-build-agentimagegen-v1.md))
 
 ## Open Threads
 

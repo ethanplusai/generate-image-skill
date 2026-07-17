@@ -166,6 +166,7 @@ uv run scripts/generate.py --batch manifest.json
 | `--steps N` | Inference steps (default 4; rarely worth raising on schnell). |
 | `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}` — loads the model **once** for all jobs. |
 | `--no-style` | Ignore the project's `imagegen.toml`. |
+| `--backend NAME` | `local` (default, free/offline) or a hosted provider — `replicate`, `openai`. |
 | `--open` | Open each result in the Mac's default image viewer after saving. |
 | `--dry-run` | Print the plan (styled prompts, sizes, seeds) without loading the model. |
 
@@ -186,20 +187,27 @@ Copy [`imagegen.example.toml`](imagegen.example.toml) to get started, or pass
 
 ## Hosted models (bring your own key)
 
-Local generation is the default — free, offline, no key. If you'd rather offload
-the compute (or you're not on a capable Mac), there's an optional hosted backend
-that runs the **same** flux-schnell model on [Replicate](https://replicate.com).
+Local generation is the default — free, offline, no key. But the backend is
+pluggable: if you'd rather offload the compute (or you're not on a capable Mac,
+or you want a specific model), point `--backend` at a hosted API and bring your
+own key.
 
-Your API key is stored in the **macOS Keychain**, and — importantly — a coding
-agent driving this tool never sees it: you store it once, and the CLI retrieves
-it at run time. The secret never lands in a prompt, a transcript, or your shell
-history.
+**Providers built in today:**
+
+| `--backend` | Runs | Get a key |
+|---|---|---|
+| `replicate` | the **same** flux-schnell model, hosted | [replicate.com](https://replicate.com) |
+| `openai` | OpenAI `gpt-image-1` | [platform.openai.com](https://platform.openai.com) |
+
+**Your key is stored in the macOS Keychain, and a coding agent driving this
+tool never sees it.** You store it once, and the CLI retrieves it at run time —
+the secret never lands in a prompt, a transcript, or your shell history.
 
 ```bash
-# Store your key once (typed at a hidden prompt, never in shell history)
+# Store a key once (typed at a hidden prompt, never in shell history)
 uv run scripts/generate.py --set-key replicate
 
-# Generate against the hosted model
+# Generate against a hosted model
 uv run scripts/generate.py "a sunlit pottery studio" \
     --out hero.webp --size 1440x800 --backend replicate
 
@@ -209,6 +217,16 @@ uv run scripts/generate.py --delete-key replicate   # remove one
 
 Hosted generation bills a small per-image fee to your provider account and needs
 a network connection; the default local backend has neither cost.
+
+### Adding another provider
+
+The two above are just the ones that ship built in — the backend layer is
+provider-agnostic. Adding one (Black Forest Labs' FLUX API, Fal, Google Imagen,
+Stability, …) is a small change in [`scripts/backends.py`](scripts/backends.py):
+write a class with a `generate(prompt, width, height, seed, steps) -> PIL.Image`
+method and add one entry to the `HOSTED_BACKENDS` map. The CLI flags, Keychain
+storage, and `--set-key`/`--list-keys` plumbing then work for it automatically.
+Open an issue if you'd like one added.
 
 ## How it works
 

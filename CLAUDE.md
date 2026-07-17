@@ -19,9 +19,11 @@ overview and `SKILL.md` for the agent-facing instructions.
 - `scripts/generate.py` — the CLI. PEP 723 inline deps (`mflux==0.18.0`). Dispatches
   to a backend; `--dry-run` never loads mflux.
 - `scripts/backends.py` — generation backends behind one `generate(...)` interface:
-  `LocalBackend` (mflux, lazy-imported) and `ReplicateBackend` (hosted, stdlib
-  `urllib`). Pure helpers (`nearest_aspect_ratio`, `replicate_payload`,
-  `parse_replicate_output`) are unit-tested; the live hosted HTTP path is not.
+  `LocalBackend` (mflux, lazy-imported) and hosted backends `ReplicateBackend`
+  and `OpenAIBackend` (stdlib `urllib`). Providers are registered in the
+  `HOSTED_BACKENDS` map — add a class + one entry to add a provider. Pure helpers
+  (payload builders, response parsers, size selection) are unit-tested; the live
+  hosted HTTP paths are not (they bill real accounts).
 - `scripts/keychain.py` — macOS Keychain storage for hosted API keys via the
   `security` tool. The agent never handles raw keys: user stores once, CLI reads
   at run time. Stdlib only.
