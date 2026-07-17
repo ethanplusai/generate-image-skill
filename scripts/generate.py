@@ -92,10 +92,20 @@ def main() -> None:
         sys.exit("error: --count must be at least 1")
     if args.steps < 1:
         sys.exit("error: --steps must be at least 1")
+    if args.seed is not None and args.seed < 0:
+        sys.exit("error: --seed must be non-negative")
 
     try:
         if args.batch:
-            jobs = parse_manifest(Path(args.batch))
+            if args.prompt or args.out or args.size or args.seed is not None or args.count != 1:
+                print(
+                    "warning: --batch ignores prompt, --out, --size, --seed, and --count",
+                    file=sys.stderr,
+                )
+            batch_path = Path(args.batch)
+            if not batch_path.is_file():
+                sys.exit(f"error: manifest not found: {batch_path}")
+            jobs = parse_manifest(batch_path)
         elif args.prompt:
             if not args.out or not args.size:
                 sys.exit("error: --out and --size are required with a prompt")

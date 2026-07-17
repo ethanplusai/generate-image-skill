@@ -68,6 +68,37 @@ def test_wrong_typed_seed_error(tmp_path):
         parse_manifest(path)
 
 
+def test_invalid_json_error_names_file(tmp_path):
+    path = tmp_path / "manifest.json"
+    path.write_text("not json {")
+    with pytest.raises(ValueError, match="invalid JSON in"):
+        parse_manifest(path)
+
+
+def test_boolean_seed_rejected(tmp_path):
+    path = _write(
+        tmp_path, [{"prompt": "x", "out": "a.webp", "size": "512x512", "seed": True}]
+    )
+    with pytest.raises(ValueError, match="item 0"):
+        parse_manifest(path)
+
+
+def test_negative_seed_rejected(tmp_path):
+    path = _write(
+        tmp_path, [{"prompt": "x", "out": "a.webp", "size": "512x512", "seed": -1}]
+    )
+    with pytest.raises(ValueError, match="item 0"):
+        parse_manifest(path)
+
+
+def test_boolean_count_rejected(tmp_path):
+    path = _write(
+        tmp_path, [{"prompt": "x", "out": "a.webp", "size": "512x512", "count": True}]
+    )
+    with pytest.raises(ValueError, match="item 0"):
+        parse_manifest(path)
+
+
 def test_seeds_sequential_from_fixed():
     assert resolve_seeds(42, 3) == [42, 43, 44]
 

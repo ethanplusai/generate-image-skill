@@ -94,9 +94,16 @@ def discover_style_config(start: Path) -> dict | None:
         if candidate.is_file():
             with open(candidate, "rb") as f:
                 try:
-                    return tomllib.load(f).get("style", {})
+                    data = tomllib.load(f)
                 except tomllib.TOMLDecodeError as exc:
                     raise ValueError(f"invalid TOML in {candidate}: {exc}") from exc
+            style = data.get("style", {})
+            for key, value in style.items():
+                if not isinstance(value, str):
+                    raise ValueError(
+                        f"invalid {candidate}: style.{key} must be a string"
+                    )
+            return style
     return None
 
 
@@ -122,7 +129,10 @@ class Job:
 
 
 def parse_manifest(path: Path) -> list[Job]:
-    data = json.loads(path.read_text())
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON in {path}: {exc}") from exc
     if not isinstance(data, list) or not data:
         raise ValueError("manifest must be a non-empty JSON array of jobs")
     jobs = []
@@ -135,10 +145,14 @@ def parse_manifest(path: Path) -> list[Job]:
                 f"manifest item {index} missing keys: {', '.join(missing)}"
             )
         seed = item.get("seed")
-        if seed is not None and not isinstance(seed, int):
-            raise ValueError(f"manifest item {index}: seed must be an integer")
+        if seed is not None and (
+            isinstance(seed, bool) or not isinstance(seed, int) or seed < 0
+        ):
+            raise ValueError(
+                f"manifest item {index}: seed must be a non-negative integer"
+            )
         count = item.get("count", 1)
-        if not isinstance(count, int) or count < 1:
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
             raise ValueError(f"manifest item {index}: count must be a positive integer")
         width, height = parse_size(item["size"])
         jobs.append(

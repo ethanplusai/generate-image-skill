@@ -39,3 +39,14 @@ def test_malformed_toml_raises_actionable_error(tmp_path):
     (tmp_path / "imagegen.toml").write_text("[style\nprefix =")
     with pytest.raises(ValueError, match="imagegen.toml"):
         discover_style_config(tmp_path)
+
+
+def test_non_string_style_value_raises_actionable_error(tmp_path):
+    (tmp_path / "imagegen.toml").write_text("[style]\nprefix = 42\n")
+    with pytest.raises(ValueError, match="style.prefix must be a string"):
+        discover_style_config(tmp_path)
+
+
+def test_config_without_style_table_returns_empty_dict(tmp_path):
+    (tmp_path / "imagegen.toml").write_text("[other]\nx = 1\n")
+    assert discover_style_config(tmp_path) == {}
