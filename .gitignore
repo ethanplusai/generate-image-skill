@@ -8,3 +8,15 @@ dist/
 __pycache__/
 .pytest_cache/
 .superpowers/
+
+# <!-- orcha:managed:start v2 -->
+# Orcha session summaries — local-only by default. Contains prompt + output
+# excerpts that may include sensitive content. Remove this rule to share
+# session history across team/devices/clones.
+.agents/sessions/
+
+# Claude Code background-session worktrees. Auto-created at
+# <repo>/.claude/worktrees/<slug>/ when a `claude --bg` task needs to write.
+# Always local — never tracked in the parent repo.
+.claude/worktrees/
+# <!-- orcha:managed:end -->

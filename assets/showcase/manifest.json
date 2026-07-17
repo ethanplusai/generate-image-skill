@@ -1,0 +1,7 @@
+[
+  {"prompt": "wide cinematic photograph of a calm developer workspace at dawn, a laptop glowing softly, a warm ceramic coffee cup, out-of-focus green plants, golden rim light, premium minimal atmosphere, generous empty space on the left side", "out": "assets/showcase/banner.webp", "size": "1200x360", "seed": 101},
+  {"prompt": "warm natural-light photograph of a sunlit pottery studio, shelves of handmade ceramic bowls, soft morning atmosphere, shallow depth of field", "out": "assets/showcase/hero.webp", "size": "640x480", "seed": 102},
+  {"prompt": "abstract macro close-up of handmade paper texture, warm ivory and sand tones, subtle fibers, soft even lighting, minimalist, low contrast", "out": "assets/showcase/texture.webp", "size": "640x480", "seed": 103},
+  {"prompt": "flat minimalist illustration of a paper airplane looping upward leaving a dotted trail, two-tone terracotta and cream, simple geometric shapes, solid off-white background", "out": "assets/showcase/illustration.webp", "size": "640x480", "seed": 104},
+  {"prompt": "bold minimal product composition of a single terracotta ceramic bowl centered on a warm cream background, soft studio lighting, generous negative space", "out": "assets/showcase/product.webp", "size": "640x480", "seed": 105}
+]

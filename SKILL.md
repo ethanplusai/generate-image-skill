@@ -18,6 +18,35 @@ Diffusion models render text and precise geometry badly. Use SVG for
 logos/icons and real screenshots for UI. If an image needs more than 1–2
 words of legible text, build it in HTML/CSS instead.
 
+## Setup — DO THIS FIRST (before the first generation in a session)
+
+Run the environment check. It is pure-stdlib and needs no dependencies — plain
+`python3` works even on a fresh machine:
+
+```bash
+python3 <SKILL_DIR>/scripts/doctor.py
+```
+
+Read its output and act on it before generating — do not make the user
+troubleshoot:
+
+- **`✗ uv is not installed`** — `uv` is the only thing that must be installed;
+  it runs the generator and manages Python + all dependencies automatically.
+  Offer to install it for the user: run `brew install uv` (or, if Homebrew is
+  absent, `curl -LsSf https://astral.sh/uv/install.sh | sh`), then re-run the
+  doctor. If a `uv run …` command ever fails with `uv: command not found`,
+  this is the cause.
+- **`✗ unsupported platform`** — agentimagegen v1 needs an Apple Silicon Mac.
+  Tell the user plainly; do not attempt to generate.
+- **`✗ only N GB free disk`** — the model needs ~7 GB; ask the user to free
+  space first.
+- **`! model not downloaded yet`** — normal on first use; just warn the user
+  the first image will take a few extra minutes for the one-time ~7 GB
+  download.
+
+When the doctor reports "Ready to generate," proceed. You only need to run it
+once per session (or whenever a `uv run` command fails unexpectedly).
+
 ## How to run
 
 The script lives in THIS skill's directory (the directory containing this
@@ -34,8 +63,9 @@ downloads ~7 GB (several minutes). Set your command timeout to at least 10
 minutes, or run in the background and poll. Do not let a default 2-minute
 timeout kill a working generation.
 
-Requirements: Apple Silicon Mac, `uv` installed (`brew install uv`). The
-script exits with a clear message on unsupported platforms.
+Requirements: Apple Silicon Mac and `uv` — the `doctor.py` check above
+verifies both and tells you exactly how to fix whatever is missing. The
+generator also exits with a clear message on unsupported platforms.
 
 ## Flags
 

@@ -43,7 +43,7 @@ def check_environment() -> None:
         sys.exit(
             "agentimagegen v1 requires an Apple Silicon Mac (macOS arm64).\n"
             "Linux/CUDA support is on the roadmap:\n"
-            "https://github.com/ethanrogers/agentimagegen#roadmap"
+            "https://github.com/ethanplusai/agentimagegen#roadmap"
         )
     try:
         result = subprocess.run(
