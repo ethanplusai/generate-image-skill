@@ -41,10 +41,12 @@ script exits with a clear message on unsupported platforms.
 
 | Flag | Meaning |
 |---|---|
-| `--out PATH` | Output file; format from extension: `.webp` (best for web), `.png`, `.jpg` |
+| `--out PATH` | Output file; format from extension: `.webp` (best for web), `.png`, `.jpg`/`.jpeg` (both work) |
 | `--size WxH` | Exact output pixels, e.g. `1440x800`. Oversized requests are upscaled with a warning |
 | `--seed N` | Reproducible output; same seed + prompt = same image |
 | `--count N` | N candidates as `name-1.webp`, `name-2.webp`, … with sequential seeds |
+| `--steps N` | Inference steps, default 4 — more steps is rarely worth it on schnell |
+| `--model REPO` | Override the HF model repo (advanced; default is the pinned 4-bit schnell) |
 | `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}` — loads the model once for all jobs |
 | `--no-style` | Ignore the project's `imagegen.toml` |
 | `--dry-run` | Print the plan (styled prompts, sizes, seeds) without loading the model |
