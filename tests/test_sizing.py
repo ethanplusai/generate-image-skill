@@ -1,6 +1,6 @@
 import pytest
 
-from imagegen_core import parse_size, plan_generation_size
+from imagegen_core import MAX_PIXELS, parse_size, plan_generation_size
 
 
 def test_parse_size_valid():
@@ -35,3 +35,16 @@ def test_common_hero_size_generates_natively():
 
 def test_oversized_request_scales_to_cap_and_flags_upscale():
     assert plan_generation_size(2880, 1600) == (1536, 848, True)
+
+
+def test_oversized_16_9_stays_under_cap():
+    gen_w, gen_h, needs_upscale = plan_generation_size(3840, 2160)
+    assert needs_upscale is True
+    assert gen_w % 16 == 0 and gen_h % 16 == 0
+    assert gen_w * gen_h <= MAX_PIXELS
+
+
+def test_oversized_square_stays_under_cap():
+    gen_w, gen_h, needs_upscale = plan_generation_size(2048, 2048)
+    assert needs_upscale is True
+    assert gen_w * gen_h <= MAX_PIXELS

@@ -12,8 +12,8 @@ def parse_size(value: str) -> tuple[int, int]:
     if not match:
         raise ValueError(f"size must look like 1440x800, got: {value!r}")
     width, height = int(match.group(1)), int(match.group(2))
-    if width < 16 or height < 16:
-        raise ValueError(f"size must be at least 16x16, got: {value!r}")
+    if width < MULTIPLE or height < MULTIPLE:
+        raise ValueError(f"size must be at least {MULTIPLE}x{MULTIPLE}, got: {value!r}")
     return width, height
 
 
@@ -38,4 +38,9 @@ def plan_generation_size(
     scale = (max_pixels / (width * height)) ** 0.5
     gen_w = max(multiple, round(width * scale / multiple) * multiple)
     gen_h = max(multiple, round(height * scale / multiple) * multiple)
+    while gen_w * gen_h > max_pixels:
+        if gen_w > multiple and gen_w / gen_h > width / height:
+            gen_w -= multiple
+        else:
+            gen_h = max(multiple, gen_h - multiple)
     return gen_w, gen_h, True
