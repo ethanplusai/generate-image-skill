@@ -1,0 +1,7 @@
+# Copy to your project root as `imagegen.toml`. Every generated image in the
+# project gets prefix/suffix wrapped around its prompt so assets share one
+# art direction. Delete the file (or pass --no-style) to opt out.
+
+[style]
+prefix = "warm editorial photography"
+suffix = "muted earthy palette, soft natural light, film grain"

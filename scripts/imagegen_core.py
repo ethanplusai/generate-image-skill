@@ -2,6 +2,7 @@
 
 import math
 import re
+import tomllib
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -76,3 +77,27 @@ def numbered_outputs(out: Path, count: int) -> list[Path]:
     if count <= 1:
         return [out]
     return [out.with_name(f"{out.stem}-{i}{out.suffix}") for i in range(1, count + 1)]
+
+
+STYLE_FILENAME = "imagegen.toml"
+
+
+def discover_style_config(start: Path) -> dict | None:
+    """Walk start and its parents for imagegen.toml; return its [style] table."""
+    for directory in [start, *start.parents]:
+        candidate = directory / STYLE_FILENAME
+        if candidate.is_file():
+            with open(candidate, "rb") as f:
+                return tomllib.load(f).get("style", {})
+    return None
+
+
+def apply_style(prompt: str, style: dict | None) -> str:
+    if not style:
+        return prompt
+    parts = [
+        style.get("prefix", "").strip(),
+        prompt.strip(),
+        style.get("suffix", "").strip(),
+    ]
+    return ", ".join(p for p in parts if p)
