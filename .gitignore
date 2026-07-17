@@ -5,3 +5,6 @@ node_modules/
 build/
 dist/
 .claude/settings.local.json
+__pycache__/
+.pytest_cache/
+.superpowers/
