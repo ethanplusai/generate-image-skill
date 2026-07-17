@@ -16,8 +16,15 @@ overview and `SKILL.md` for the agent-facing instructions.
 - `scripts/imagegen_core.py` — all pure logic (size planning, format-aware
   saving, style-config discovery, manifest parsing). No mflux import — fully
   unit-testable. Imports Pillow.
-- `scripts/generate.py` — the CLI. PEP 723 inline deps (`mflux==0.18.0`). The
-  mflux import lives inside `run_plans` so `--dry-run` never loads it.
+- `scripts/generate.py` — the CLI. PEP 723 inline deps (`mflux==0.18.0`). Dispatches
+  to a backend; `--dry-run` never loads mflux.
+- `scripts/backends.py` — generation backends behind one `generate(...)` interface:
+  `LocalBackend` (mflux, lazy-imported) and `ReplicateBackend` (hosted, stdlib
+  `urllib`). Pure helpers (`nearest_aspect_ratio`, `replicate_payload`,
+  `parse_replicate_output`) are unit-tested; the live hosted HTTP path is not.
+- `scripts/keychain.py` — macOS Keychain storage for hosted API keys via the
+  `security` tool. The agent never handles raw keys: user stores once, CLI reads
+  at run time. Stdlib only.
 - `scripts/doctor.py` — preflight environment check. **Pure standard library,
   targets Python 3.9+** (the stock macOS `python3`) so it runs before uv exists.
   Do not add third-party imports or 3.10+ syntax here.

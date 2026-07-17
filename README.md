@@ -184,6 +184,32 @@ suffix = "muted earthy palette, soft natural light, film grain"
 Copy [`imagegen.example.toml`](imagegen.example.toml) to get started, or pass
 `--no-style` to opt out for a single image.
 
+## Hosted models (bring your own key)
+
+Local generation is the default — free, offline, no key. If you'd rather offload
+the compute (or you're not on a capable Mac), there's an optional hosted backend
+that runs the **same** flux-schnell model on [Replicate](https://replicate.com).
+
+Your API key is stored in the **macOS Keychain**, and — importantly — a coding
+agent driving this tool never sees it: you store it once, and the CLI retrieves
+it at run time. The secret never lands in a prompt, a transcript, or your shell
+history.
+
+```bash
+# Store your key once (typed at a hidden prompt, never in shell history)
+uv run scripts/generate.py --set-key replicate
+
+# Generate against the hosted model
+uv run scripts/generate.py "a sunlit pottery studio" \
+    --out hero.webp --size 1440x800 --backend replicate
+
+uv run scripts/generate.py --list-keys              # which providers have a key
+uv run scripts/generate.py --delete-key replicate   # remove one
+```
+
+Hosted generation bills a small per-image fee to your provider account and needs
+a network connection; the default local backend has neither cost.
+
 ## How it works
 
 - **Model:** FLUX.1-schnell, 4-bit quantized ([`dhairyashil/FLUX.1-schnell-mflux-4bit`](https://huggingface.co/dhairyashil/FLUX.1-schnell-mflux-4bit)), ~7 GB.

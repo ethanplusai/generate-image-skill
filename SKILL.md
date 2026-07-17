@@ -79,8 +79,32 @@ generator also exits with a clear message on unsupported platforms.
 | `--model REPO` | Override the HF model repo (advanced; default is the pinned 4-bit schnell) |
 | `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}` — loads the model once for all jobs |
 | `--no-style` | Ignore the project's `imagegen.toml` |
+| `--backend` | `local` (default, free/offline) or a hosted provider like `replicate` |
 | `--open` | Open each result in the Mac's default viewer after saving |
 | `--dry-run` | Print the plan (styled prompts, sizes, seeds) without loading the model |
+
+## Hosted models (optional — bring your own key)
+
+Local generation is the default and needs no key. If the user wants to offload
+compute to a hosted service (or isn't on a capable Mac), there's an opt-in
+hosted backend — currently Replicate, running the same flux-schnell model.
+
+**The key is stored safely, and you (the agent) must never handle it:**
+
+1. The **user** runs this once and types their key at a hidden prompt. Do NOT
+   ask them to paste the key into the chat, and never run this with a key inline
+   on the command line:
+   ```bash
+   uv run <SKILL_DIR>/scripts/generate.py --set-key replicate
+   ```
+   The key goes into the macOS Keychain (encrypted, access-controlled).
+2. Then generate with `--backend replicate`. The CLI reads the key from the
+   Keychain itself, so the secret never enters your context, a log, or the
+   shell history.
+
+`--list-keys` shows which providers have a key stored; `--delete-key <provider>`
+removes one. Hosted generation bills a small per-image fee to the user's account
+and needs a network connection; local stays free and offline.
 
 ## Workflow rules
 

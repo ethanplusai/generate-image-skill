@@ -20,6 +20,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import keychain
+from backends import HOSTED_PROVIDERS, get_backend
 from imagegen_core import (
     SUPPORTED_EXTENSIONS,
     Job,
@@ -38,10 +40,20 @@ DEFAULT_MODEL = "dhairyashil/FLUX.1-schnell-mflux-4bit"
 BASE_MODEL = "schnell"
 
 
-def check_environment() -> None:
+def check_environment(backend: str) -> None:
+    # Hosted backends offload compute, so they don't need Apple Silicon — but
+    # keys live in the macOS Keychain, so they still require macOS in v1.
+    if backend != "local":
+        if sys.platform != "darwin":
+            sys.exit(
+                "hosted backends currently require macOS "
+                "(API keys are stored in the Keychain)."
+            )
+        return
     if sys.platform != "darwin" or platform.machine() != "arm64":
         sys.exit(
-            "generate-image-skill v1 requires an Apple Silicon Mac (macOS arm64).\n"
+            "the local backend requires an Apple Silicon Mac (macOS arm64).\n"
+            "On another machine, use a hosted backend (e.g. --backend replicate).\n"
             "Linux/CUDA support is on the roadmap:\n"
             "https://github.com/ethanplusai/generate-image-skill#roadmap"
         )
@@ -78,6 +90,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-style", action="store_true", help="ignore project imagegen.toml"
     )
     parser.add_argument(
+        "--backend",
+        choices=("local", *HOSTED_PROVIDERS),
+        default="local",
+        help="generation backend (default: local mflux; hosted needs a stored key)",
+    )
+    parser.add_argument(
+        "--set-key",
+        metavar="PROVIDER",
+        help="store a hosted provider's API key in the macOS Keychain, then exit",
+    )
+    parser.add_argument(
+        "--delete-key",
+        metavar="PROVIDER",
+        help="remove a provider's stored API key, then exit",
+    )
+    parser.add_argument(
+        "--list-keys",
+        action="store_true",
+        help="show which hosted providers have a stored key, then exit",
+    )
+    parser.add_argument(
         "--open",
         action="store_true",
         help="open each result in the default image viewer after saving (macOS)",
@@ -90,8 +123,49 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def handle_key_commands(args) -> bool:
+    """Run any key-management command. Returns True if one ran (caller exits)."""
+    if args.set_key:
+        import getpass
+
+        if not sys.stdin.isatty():
+            sys.exit(
+                "error: --set-key must be run interactively in a terminal so the "
+                "key is typed at a hidden prompt.\nRun it yourself in a shell; do "
+                "not invoke it from an agent or a pipe."
+            )
+        key = getpass.getpass(
+            f"Paste the API key for '{args.set_key}' (input hidden): "
+        ).strip()
+        if not key:
+            sys.exit("error: no key entered")
+        try:
+            keychain.set_key(args.set_key, key)
+        except RuntimeError as exc:
+            sys.exit(f"error: {exc}")
+        print(f"stored key for '{args.set_key}' in the macOS Keychain.")
+        return True
+    if args.delete_key:
+        deleted = keychain.delete_key(args.delete_key)
+        print(
+            f"removed stored key for '{args.delete_key}'."
+            if deleted
+            else f"no key was stored for '{args.delete_key}'."
+        )
+        return True
+    if args.list_keys:
+        for provider in HOSTED_PROVIDERS:
+            mark = "stored" if keychain.key_exists(provider) else "not set"
+            print(f"  {provider}: {mark}")
+        return True
+    return False
+
+
 def main() -> None:
     args = build_parser().parse_args()
+
+    if handle_key_commands(args):
+        return
 
     if args.count < 1:
         sys.exit("error: --count must be at least 1")
@@ -157,8 +231,22 @@ def main() -> None:
                 print(f"          prompt: {job.prompt}")
         return
 
-    check_environment()
-    run_plans(plans, model=args.model, steps=args.steps, open_after=args.open)
+    check_environment(args.backend)
+    try:
+        api_key = (
+            keychain.get_key(args.backend)
+            if args.backend in HOSTED_PROVIDERS
+            else None
+        )
+        backend = get_backend(
+            args.backend,
+            model=args.model,
+            base_model=BASE_MODEL,
+            api_key=api_key,
+        )
+    except ValueError as exc:
+        sys.exit(f"error: {exc}")
+    run_plans(plans, backend=backend, steps=args.steps, open_after=args.open)
 
 
 def open_in_viewer(path: Path) -> None:
@@ -169,27 +257,22 @@ def open_in_viewer(path: Path) -> None:
         pass
 
 
-def run_plans(plans, model: str, steps: int, open_after: bool = False) -> None:
-    print(f"loading {model} (first run downloads ~7 GB)...", flush=True)
-    from mflux.models.flux.variants.txt2img.flux import Flux1, ModelConfig
-
-    flux = Flux1(model_config=ModelConfig.from_name(model, base_model=BASE_MODEL))
+def run_plans(plans, backend, steps: int, open_after: bool = False) -> None:
     for job, gen_w, gen_h, needs_upscale, outs, seeds in plans:
         for out, seed in zip(outs, seeds):
-            generated = flux.generate_image(
-                seed=seed,
-                prompt=job.prompt,
-                num_inference_steps=steps,
-                width=gen_w,
-                height=gen_h,
-            )
-            image = finalize_image(generated.image, job.width, job.height)
-            if needs_upscale:
+            try:
+                raw = backend.generate(job.prompt, gen_w, gen_h, seed, steps)
+            except (ValueError, OSError) as exc:
+                # OSError covers urllib's URLError/HTTPError; ValueError covers
+                # bad/empty provider responses. Keep it actionable, not a traceback.
+                sys.exit(f"error: image generation failed: {exc}")
+            if raw.width < job.width or raw.height < job.height:
                 print(
-                    f"warning: {out} exceeds the native generation ceiling; "
-                    f"upscaled from {gen_w}x{gen_h}.",
+                    f"warning: {out} upscaled from {raw.width}x{raw.height} "
+                    f"to {job.width}x{job.height} (source was smaller).",
                     file=sys.stderr,
                 )
+            image = finalize_image(raw, job.width, job.height)
             save_image(image, out)
             print(f"wrote {out} ({job.width}x{job.height}, seed={seed})")
             if open_after:
