@@ -2,9 +2,15 @@
 
 import math
 import re
+from pathlib import Path
+
+from PIL import Image, ImageOps
 
 MAX_PIXELS = 1_310_720  # 1.25 MP: schnell stays reliable here, and 1440x800 heroes fit natively
 MULTIPLE = 16
+
+WEBP_QUALITY = 82
+JPEG_QUALITY = 88
 
 
 def parse_size(value: str) -> tuple[int, int]:
@@ -44,3 +50,29 @@ def plan_generation_size(
         else:
             gen_h = max(multiple, gen_h - multiple)
     return gen_w, gen_h, True
+
+
+def finalize_image(img: Image.Image, width: int, height: int) -> Image.Image:
+    """Resize + center-crop (cover semantics) to the exact requested pixels."""
+    return ImageOps.fit(img, (width, height), Image.LANCZOS)
+
+
+def save_image(img: Image.Image, path: Path) -> None:
+    ext = path.suffix.lower()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if ext == ".webp":
+        img.save(path, quality=WEBP_QUALITY)
+    elif ext in (".jpg", ".jpeg"):
+        img.convert("RGB").save(path, quality=JPEG_QUALITY)
+    elif ext == ".png":
+        img.save(path)
+    else:
+        raise ValueError(
+            f"unsupported output format {ext!r}: use .webp, .png, or .jpg"
+        )
+
+
+def numbered_outputs(out: Path, count: int) -> list[Path]:
+    if count <= 1:
+        return [out]
+    return [out.with_name(f"{out.stem}-{i}{out.suffix}") for i in range(1, count + 1)]
