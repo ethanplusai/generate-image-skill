@@ -46,6 +46,28 @@ def test_empty_manifest_error(tmp_path):
         parse_manifest(path)
 
 
+def test_non_dict_item_error(tmp_path):
+    path = _write(tmp_path, [None])
+    with pytest.raises(ValueError, match="item 0"):
+        parse_manifest(path)
+
+
+def test_wrong_typed_count_error(tmp_path):
+    path = _write(
+        tmp_path, [{"prompt": "x", "out": "a.webp", "size": "512x512", "count": "two"}]
+    )
+    with pytest.raises(ValueError, match="item 0"):
+        parse_manifest(path)
+
+
+def test_wrong_typed_seed_error(tmp_path):
+    path = _write(
+        tmp_path, [{"prompt": "x", "out": "a.webp", "size": "512x512", "seed": "seven"}]
+    )
+    with pytest.raises(ValueError, match="item 0"):
+        parse_manifest(path)
+
+
 def test_seeds_sequential_from_fixed():
     assert resolve_seeds(42, 3) == [42, 43, 44]
 

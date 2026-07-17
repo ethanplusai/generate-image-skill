@@ -125,11 +125,19 @@ def parse_manifest(path: Path) -> list[Job]:
         raise ValueError("manifest must be a non-empty JSON array of jobs")
     jobs = []
     for index, item in enumerate(data):
+        if not isinstance(item, dict):
+            raise ValueError(f"manifest item {index} must be a JSON object")
         missing = [key for key in ("prompt", "out", "size") if key not in item]
         if missing:
             raise ValueError(
                 f"manifest item {index} missing keys: {', '.join(missing)}"
             )
+        seed = item.get("seed")
+        if seed is not None and not isinstance(seed, int):
+            raise ValueError(f"manifest item {index}: seed must be an integer")
+        count = item.get("count", 1)
+        if not isinstance(count, int) or count < 1:
+            raise ValueError(f"manifest item {index}: count must be a positive integer")
         width, height = parse_size(item["size"])
         jobs.append(
             Job(
@@ -137,8 +145,8 @@ def parse_manifest(path: Path) -> list[Job]:
                 out=Path(item["out"]),
                 width=width,
                 height=height,
-                seed=item.get("seed"),
-                count=item.get("count", 1),
+                seed=seed,
+                count=count,
             )
         )
     return jobs
