@@ -130,7 +130,7 @@ walks you through any fix — that's built into [SKILL.md](SKILL.md).
 | Symptom | Cause & fix |
 |---|---|
 | `uv: command not found` | `uv` isn't installed. `brew install uv` — or, without Homebrew, `curl -LsSf https://astral.sh/uv/install.sh \| sh`. Then re-run the doctor. |
-| `requires an Apple Silicon Mac` | v1 runs on M1+ Macs only. Intel Macs, Linux, and Windows aren't supported yet (see [Roadmap](#roadmap)). |
+| `the local backend requires an Apple Silicon Mac` | The default (local) backend needs an M1+ Mac. On an Intel Mac, use a hosted backend — [`--backend replicate`](#hosted-models-bring-your-own-key). Local Linux/Windows support is on the [Roadmap](#roadmap). |
 | First run "hangs" for minutes | It's downloading the ~7 GB model. Watch progress; it only happens once. Give any wrapping command a 10-minute timeout. |
 | Generation is slow / machine swaps | Under ~24 GB of RAM, the model may swap. It still works, just slower. |
 | Want the disk space back | See [Uninstall](#uninstall). |
@@ -222,9 +222,15 @@ per 1024×768 image, ~16 GB peak memory.
 
 ## Requirements
 
+**Local backend (default — free, offline):**
+
 - Apple Silicon Mac (M1 or newer). 24 GB+ RAM recommended; 16 GB works but may swap.
 - [`uv`](https://docs.astral.sh/uv/) — `brew install uv`
 - ~8 GB free disk for the one-time model download
+
+**Hosted backend (optional):** any Mac (Intel or Apple Silicon), `uv`, and a
+provider API key — no model download, no GPU needed. See
+[Hosted models](#hosted-models-bring-your-own-key).
 
 ## Installing per agent
 
