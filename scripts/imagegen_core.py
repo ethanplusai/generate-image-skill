@@ -1,8 +1,11 @@
 """Pure logic for agentimagegen: no mflux imports, fully unit-testable."""
 
+import json
 import math
+import random
 import re
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -104,3 +107,44 @@ def apply_style(prompt: str, style: dict | None) -> str:
         style.get("suffix", "").strip(),
     ]
     return ", ".join(p for p in parts if p)
+
+
+@dataclass
+class Job:
+    prompt: str
+    out: Path
+    width: int
+    height: int
+    seed: int | None = None
+    count: int = 1
+
+
+def parse_manifest(path: Path) -> list[Job]:
+    data = json.loads(path.read_text())
+    if not isinstance(data, list) or not data:
+        raise ValueError("manifest must be a non-empty JSON array of jobs")
+    jobs = []
+    for index, item in enumerate(data):
+        missing = [key for key in ("prompt", "out", "size") if key not in item]
+        if missing:
+            raise ValueError(
+                f"manifest item {index} missing keys: {', '.join(missing)}"
+            )
+        width, height = parse_size(item["size"])
+        jobs.append(
+            Job(
+                prompt=item["prompt"],
+                out=Path(item["out"]),
+                width=width,
+                height=height,
+                seed=item.get("seed"),
+                count=item.get("count", 1),
+            )
+        )
+    return jobs
+
+
+def resolve_seeds(seed: int | None, count: int) -> list[int]:
+    if seed is None:
+        return [random.randrange(2**32) for _ in range(count)]
+    return [seed + i for i in range(count)]
