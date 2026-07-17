@@ -37,6 +37,7 @@ minimum; 16 GB "works but will swap."
 | Invocation model | Plain one-shot CLI | Simplest; no daemon lifecycle. Model-load tax amortized via `--batch` |
 | Model | FLUX.1-schnell 4-bit quantized | Apache 2.0 (commercial OK), ungated download, fast (4 steps). FLUX.1-dev rejected: non-commercial license |
 | Distribution | Self-contained via uv, PEP 723 inline deps | Users install nothing but uv; no PyPI account; versions in lockstep with skill |
+| Dependency pinning | Pin `mflux` (and pillow) to exact known-good versions in the PEP 723 block | A public repo where `uv run` floats to latest breaks unreproducibly for strangers; bumps happen via PRs with a smoke test |
 | v1 scope | Exact-size output, web formats, style config | Background removal, CUDA, daemon, img2img deferred to roadmap |
 
 Candidate to evaluate during implementation: `Runpod/FLUX.2-klein-4B-mflux-4bit`
@@ -70,6 +71,13 @@ Behavior:
 - **Size mapping:** map requested size to nearest Flux-friendly resolution
   (~1 MP, dimensions multiple of 16), generate, then resize + center-crop to
   the exact requested pixels.
+- **Oversized requests:** if the requested size exceeds native generation
+  (~1 MP), generate at the largest aspect-matching native resolution, then
+  Lanczos-upscale to the target and print a warning that the result is
+  upscaled. Never error, never silently degrade.
+- **Multiple candidates:** `--count N` writes numbered siblings
+  (`hero-1.webp`, `hero-2.webp`, …) with distinct seeds, printed to stdout so
+  the agent can view and pick.
 - **Format from extension:** `.webp` (recommended default, quality ~82),
   `.png`, `.jpg`.
 - **Batch:** `--batch manifest.json` takes a list of
@@ -99,6 +107,12 @@ Half the product. Contents:
 - **Workflow rules:** generate 1–2 candidates (not 10); *view the output*
   (agents can read images) to judge quality before wiring it in; expect
   ~40–90 s per image and plan batching accordingly.
+- **Timeout handling:** agents' default shell timeouts (~2 min) are shorter
+  than a multi-image batch. SKILL.md must explicitly instruct agents to raise
+  the command timeout or run generation in the background and poll.
+- **Path resolution:** the skill installs outside the project cwd. SKILL.md
+  must reference `scripts/generate.py` via the skill's own base directory
+  (provided to the agent when the skill loads), never a cwd-relative path.
 
 `reference/prompting.md` holds the longer per-asset recipes so SKILL.md stays
 small and is loaded cheaply.
@@ -110,6 +124,8 @@ small and is loaded cheaply.
 - `--dry-run` exercises everything up to inference.
 - Manual smoke tests on the reference M4 Pro; the measured numbers above are
   the baseline.
+- **CI:** GitHub Actions on a macOS (Apple Silicon) runner runs the unit
+  tests and a `--dry-run` invocation on every PR. No model download in CI.
 
 ## Install story (README)
 
@@ -121,6 +137,8 @@ small and is loaded cheaply.
   implementation, not from memory.
 - Prereqs: Apple Silicon Mac, 24 GB+ RAM recommended, `uv`
   (`brew install uv`), ~8 GB free disk.
+- Uninstall note: model weights live in the Hugging Face cache
+  (`~/.cache/huggingface`); document how to reclaim the ~7 GB.
 
 ## Out of scope for v1 (roadmap section in README)
 
