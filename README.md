@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/showcase/banner.webp" alt="agentimagegen" width="100%">
+  <img src="assets/showcase/banner.webp" alt="generate-image-skill" width="100%">
 </p>
 
-<h1 align="center">agentimagegen</h1>
+<h1 align="center">generate-image-skill</h1>
 
 <p align="center">
   <strong>Give your coding agent the power to generate its own images — locally, free, no API keys.</strong>
@@ -24,7 +24,7 @@ placeholder boxes or hotlinking stock photos, it generates the real asset on
 your machine in about 40 seconds — using [FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell)
 running through [mflux](https://github.com/filipstrand/mflux) on Apple Silicon.
 
-**agentimagegen is two things in one repo:**
+**generate-image-skill is two things in one repo:**
 
 1. **An [Agent Skill](SKILL.md)** — Claude Code, Codex, and any agent that
    reads skills learn *when* to generate imagery (and, just as important, when
@@ -33,7 +33,7 @@ running through [mflux](https://github.com/filipstrand/mflux) on Apple Silicon.
 2. **A self-contained CLI** — no install step beyond [`uv`](https://docs.astral.sh/uv/).
    Run it yourself, too.
 
-## Made with agentimagegen
+## Made with generate-image-skill
 
 Every image below was generated locally by this tool — no editing, no
 cherry-picking across dozens of tries. Each took ~40 seconds on an M4 Pro.
@@ -65,8 +65,8 @@ cherry-picking across dozens of tries. Each took ~40 seconds on an M4 Pro.
 
 ```bash
 # 1. Clone into your Claude Code skills directory
-git clone https://github.com/ethanplusai/agentimagegen ~/.claude/skills/agentimagegen
-cd ~/.claude/skills/agentimagegen
+git clone https://github.com/ethanplusai/generate-image-skill ~/.claude/skills/generate-image-skill
+cd ~/.claude/skills/generate-image-skill
 
 # 2. Check your machine is ready (needs nothing but system python3)
 python3 scripts/doctor.py
@@ -108,7 +108,7 @@ Mac with zero setup and tells you exactly what (if anything) to fix:
 
 ```text
 $ python3 scripts/doctor.py
-agentimagegen — environment check
+generate-image-skill — environment check
 
   ✓ platform: Apple Silicon Mac
   ✓ python: Python 3.11
@@ -166,6 +166,7 @@ uv run scripts/generate.py --batch manifest.json
 | `--steps N` | Inference steps (default 4; rarely worth raising on schnell). |
 | `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}` — loads the model **once** for all jobs. |
 | `--no-style` | Ignore the project's `imagegen.toml`. |
+| `--open` | Open each result in the Mac's default image viewer after saving. |
 | `--dry-run` | Print the plan (styled prompts, sizes, seeds) without loading the model. |
 
 ## Consistent art direction
@@ -201,8 +202,8 @@ per 1024×768 image, ~16 GB peak memory.
 
 ## Installing per agent
 
-- **Claude Code** — clone into `~/.claude/skills/agentimagegen` (global) or
-  `.claude/skills/agentimagegen` inside a project.
+- **Claude Code** — clone into `~/.claude/skills/generate-image-skill` (global) or
+  `.claude/skills/generate-image-skill` inside a project.
 - **Codex and others** — clone anywhere and point the agent at
   [`SKILL.md`](SKILL.md) (e.g. reference it from `AGENTS.md`). The CLI works
   standalone; the skill file is instructions, not a dependency.

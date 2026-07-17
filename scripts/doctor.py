@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preflight environment check for agentimagegen.
+"""Preflight environment check for generate-image-skill.
 
 Pure standard library — no third-party imports — so it runs on a bare macOS
 with plain `python3`, BEFORE uv or anything else is installed:
@@ -41,7 +41,7 @@ def check_platform(system: str, machine: str) -> tuple[str, str, str | None]:
     return (
         FAIL,
         f"unsupported platform ({system}/{machine})",
-        "agentimagegen v1 needs an Apple Silicon Mac (M1 or newer). "
+        "generate-image-skill v1 needs an Apple Silicon Mac (M1 or newer). "
         "Linux/CUDA support is on the roadmap.",
     )
 
@@ -120,7 +120,7 @@ def overall_status(statuses: list[str]) -> str:
 
 def format_report(findings: list[tuple[str, str, str, str | None]]) -> str:
     """Render findings as a report. Each finding is (label, status, detail, fix)."""
-    lines = ["agentimagegen — environment check", ""]
+    lines = ["generate-image-skill — environment check", ""]
     for label, status, detail, fix in findings:
         lines.append(f"  {_ICON[status]} {label}: {detail}")
         if fix:

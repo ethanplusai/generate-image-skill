@@ -1,9 +1,9 @@
 ---
-name: agentimagegen
+name: generate-image-skill
 description: Generate original images locally (free, offline, no API keys) for websites and apps — hero images, backgrounds, textures, spot illustrations, og:images, placeholder photography — using FLUX.1-schnell on Apple Silicon. Use when a project needs real imagery instead of stock photos, gray boxes, or placeholder URLs. Not for logos, icons, or UI screenshots.
 ---
 
-# agentimagegen — local image generation for coding agents
+# generate-image-skill — local image generation for coding agents
 
 Generate production-ready imagery while you build, on the user's own machine.
 Free, offline, Apache-2.0-licensed model, no API keys.
@@ -36,7 +36,7 @@ troubleshoot:
   absent, `curl -LsSf https://astral.sh/uv/install.sh | sh`), then re-run the
   doctor. If a `uv run …` command ever fails with `uv: command not found`,
   this is the cause.
-- **`✗ unsupported platform`** — agentimagegen v1 needs an Apple Silicon Mac.
+- **`✗ unsupported platform`** — generate-image-skill v1 needs an Apple Silicon Mac.
   Tell the user plainly; do not attempt to generate.
 - **`✗ only N GB free disk`** — the model needs ~7 GB; ask the user to free
   space first.
@@ -79,6 +79,7 @@ generator also exits with a clear message on unsupported platforms.
 | `--model REPO` | Override the HF model repo (advanced; default is the pinned 4-bit schnell) |
 | `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}` — loads the model once for all jobs |
 | `--no-style` | Ignore the project's `imagegen.toml` |
+| `--open` | Open each result in the Mac's default viewer after saving |
 | `--dry-run` | Print the plan (styled prompts, sizes, seeds) without loading the model |
 
 ## Workflow rules
@@ -95,9 +96,61 @@ generator also exits with a clear message on unsupported platforms.
    creating one (copy `imagegen.example.toml` from this skill's directory)
    so all assets share an art direction.
 
-## Prompting
+## Writing good prompts — be specific and detailed
 
-Flux responds best to natural-language scene descriptions, not tag soup.
-Describe subject, setting, lighting, and mood in a full sentence. See
-`reference/prompting.md` in this skill's directory for per-asset-type
+Flux rewards detailed, natural-language scene descriptions and punishes terse
+tag soup. A one-word prompt gives a generic, disappointing result. Every prompt
+should name, in a full sentence or two:
+
+- **Subject** — the concrete thing ("handmade ceramic bowls", not "something nice")
+- **Setting / context** — where it is, what surrounds it
+- **Lighting** — direction and quality ("soft morning light from the left", "hard studio spotlight")
+- **Mood / palette** — the feeling and the colors ("calm, muted earthy tones")
+- **Composition** — framing and negative space, *especially where text will
+  overlay*: "subject on the right third, empty space on the left for a headline"
+
+For photographic assets, add shot type and depth of field ("wide establishing
+shot, shallow depth of field"). For illustrations, specify a flat style, simple
+shapes, and a solid background.
+
+**Weak → strong:**
+
+> ❌ `a coffee shop`
+> ✅ `warm natural-light photograph of a cozy independent coffee shop interior at golden hour, exposed brick walls, a barista blurred in the background, steam rising from a cup in the foreground, shallow depth of field, inviting mood`
+
+Never ask for legible text beyond 1–2 words — diffusion renders it as gibberish.
+Put real copy in HTML/CSS over the image.
+
+## Choosing dimensions — always set `--size` deliberately
+
+Pick the size from the asset's real role in the layout, never a default. Match
+the aspect ratio to where the image will actually sit, so you aren't cropping
+blind later.
+
+| Asset | Size |
+|---|---|
+| Full-width hero | `1440x800` (or `2880x1600` for retina) |
+| Wide banner strip | `1200x360` |
+| Section background | `1440x600` |
+| og:image / social card | `1200x630` |
+| Square spot illustration | `800x800` |
+| Portrait / mobile hero | `800x1200` |
+
+## Showing the result to the user
+
+After you generate and view an image yourself, surface it to the user — don't
+leave a file path buried in tool output. Use whatever the current environment
+supports, in order of preference:
+
+1. **Orcha:** `open "orcha://file?path=<ABSOLUTE_PATH>"` opens the image in
+   Orcha's in-app file viewer.
+2. **`--open` flag:** pass `--open` to the generator and it opens each result in
+   the Mac's default image viewer (Preview) right after saving.
+3. **Image-capable terminals:** `imgcat <path>` (iTerm2) or `kitten icat <path>`
+   (Kitty / Ghostty / WezTerm) render the image inline.
+4. **Always** also print the path so the user can open it themselves.
+
+## Reference
+
+See `reference/prompting.md` in this skill's directory for per-asset-type prompt
 recipes (hero, texture, illustration, og:image, photography).

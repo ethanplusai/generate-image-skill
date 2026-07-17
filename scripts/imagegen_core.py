@@ -1,4 +1,4 @@
-"""Pure logic for agentimagegen: no mflux imports, fully unit-testable."""
+"""Pure logic for generate-image-skill: no mflux imports, fully unit-testable."""
 
 import json
 import math

@@ -41,9 +41,9 @@ BASE_MODEL = "schnell"
 def check_environment() -> None:
     if sys.platform != "darwin" or platform.machine() != "arm64":
         sys.exit(
-            "agentimagegen v1 requires an Apple Silicon Mac (macOS arm64).\n"
+            "generate-image-skill v1 requires an Apple Silicon Mac (macOS arm64).\n"
             "Linux/CUDA support is on the roadmap:\n"
-            "https://github.com/ethanplusai/agentimagegen#roadmap"
+            "https://github.com/ethanplusai/generate-image-skill#roadmap"
         )
     try:
         result = subprocess.run(
@@ -76,6 +76,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--no-style", action="store_true", help="ignore project imagegen.toml"
+    )
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        help="open each result in the default image viewer after saving (macOS)",
     )
     parser.add_argument(
         "--dry-run",
@@ -153,10 +158,18 @@ def main() -> None:
         return
 
     check_environment()
-    run_plans(plans, model=args.model, steps=args.steps)
+    run_plans(plans, model=args.model, steps=args.steps, open_after=args.open)
 
 
-def run_plans(plans, model: str, steps: int) -> None:
+def open_in_viewer(path: Path) -> None:
+    """Open a saved image in the Mac's default viewer. Best-effort."""
+    try:
+        subprocess.run(["open", str(path)], check=False)
+    except OSError:
+        pass
+
+
+def run_plans(plans, model: str, steps: int, open_after: bool = False) -> None:
     print(f"loading {model} (first run downloads ~7 GB)...", flush=True)
     from mflux.models.flux.variants.txt2img.flux import Flux1, ModelConfig
 
@@ -179,6 +192,8 @@ def run_plans(plans, model: str, steps: int) -> None:
                 )
             save_image(image, out)
             print(f"wrote {out} ({job.width}x{job.height}, seed={seed})")
+            if open_after:
+                open_in_viewer(out)
 
 
 if __name__ == "__main__":

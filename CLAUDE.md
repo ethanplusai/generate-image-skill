@@ -1,4 +1,4 @@
-# agentimagegen
+# generate-image-skill
 
 A public Agent Skill + self-contained CLI that generates images locally with
 FLUX.1-schnell (via mflux) on Apple Silicon. See `README.md` for the product
