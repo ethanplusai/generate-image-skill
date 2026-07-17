@@ -59,6 +59,10 @@ def finalize_image(img: Image.Image, width: int, height: int) -> Image.Image:
 
 def save_image(img: Image.Image, path: Path) -> None:
     ext = path.suffix.lower()
+    if ext not in (".webp", ".jpg", ".jpeg", ".png"):
+        raise ValueError(
+            f"unsupported output format {ext!r}: use .webp, .png, or .jpg"
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     if ext == ".webp":
         img.save(path, quality=WEBP_QUALITY)
@@ -66,10 +70,6 @@ def save_image(img: Image.Image, path: Path) -> None:
         img.convert("RGB").save(path, quality=JPEG_QUALITY)
     elif ext == ".png":
         img.save(path)
-    else:
-        raise ValueError(
-            f"unsupported output format {ext!r}: use .webp, .png, or .jpg"
-        )
 
 
 def numbered_outputs(out: Path, count: int) -> list[Path]:

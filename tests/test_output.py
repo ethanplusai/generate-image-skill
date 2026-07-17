@@ -39,6 +39,13 @@ def test_save_rejects_unknown_extension(tmp_path):
         save_image(Image.new("RGB", (32, 32)), tmp_path / "img.gif")
 
 
+def test_save_rejects_unknown_extension_without_creating_dirs(tmp_path):
+    target = tmp_path / "newdir" / "img.gif"
+    with pytest.raises(ValueError):
+        save_image(Image.new("RGB", (32, 32)), target)
+    assert not (tmp_path / "newdir").exists()
+
+
 def test_numbered_outputs_single():
     assert numbered_outputs(Path("a/hero.webp"), 1) == [Path("a/hero.webp")]
 
