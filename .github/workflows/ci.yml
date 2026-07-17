@@ -13,6 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false # deps are inline (PEP 723); no lockfile to cache
       - name: Unit tests (no model)
         run: uvx --with pillow pytest tests/ -v
       - name: CLI dry-run (no model)
