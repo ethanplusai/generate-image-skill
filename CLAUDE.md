@@ -4,16 +4,24 @@ A public Agent Skill + self-contained CLI that generates images for coding
 agents: through Codex's built-in image tool on the user's ChatGPT plan (default
 when signed in), locally with FLUX.1-schnell (via mflux) on Apple Silicon, or a
 hosted API. See `README.md` for the product
-overview and `SKILL.md` for the agent-facing instructions.
+overview and `skills/generate-image/SKILL.md` for the agent-facing instructions.
+
+**Layout matters for skills.sh / `npx skills add`:** everything the installed
+skill needs lives in `skills/generate-image/` (SKILL.md, scripts, reference,
+example config) and nothing else does. Repo-only files (README, tests, docs,
+this file) stay outside it so they are never copied into users' skill folders.
+Never add a root-level SKILL.md: it would shadow `skills/`.
 
 ## Commands
 
 - **Run the test suite** (no model needed, ~0.1s): `uvx --with "pillow<13" pytest tests/ -v`
-- **Environment check** (pure stdlib, runs on system python3): `python3 scripts/doctor.py`
-- **Generate an image**: `uv run scripts/generate.py "PROMPT" --out out.webp --size 1440x800`
+- **Environment check** (pure stdlib, runs on system python3): `python3 skills/generate-image/scripts/doctor.py`
+- **Generate an image**: `uv run skills/generate-image/scripts/generate.py "PROMPT" --out out.webp --size 1440x800`
 - **Dry-run** (validate everything without loading the model): add `--dry-run`
 
 ## Architecture
+
+Paths below are relative to `skills/generate-image/`.
 
 - `scripts/imagegen_core.py` — all pure logic (size planning, format-aware
   saving, style-config discovery, manifest parsing). No mflux import — fully

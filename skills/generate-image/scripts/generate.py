@@ -71,7 +71,7 @@ def resolve_backend(requested: str, codex_ready, apple_silicon: bool) -> str:
         "no image backend is available on this machine. Either:\n"
         "  - install the Codex CLI and sign in with ChatGPT: "
         "`npm install -g @openai/codex && codex login`, or\n"
-        "  - store a hosted API key: `uv run scripts/generate.py --set-key openai` "
+        "  - store a hosted API key: `uv run <skill dir>/scripts/generate.py --set-key openai` "
         "and pass --backend openai"
     )
 

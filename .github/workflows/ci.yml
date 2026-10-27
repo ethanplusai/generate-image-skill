@@ -18,4 +18,4 @@ jobs:
       - name: Unit tests (no model)
         run: uvx --with "pillow<13" pytest tests/ -v
       - name: CLI dry-run (no model)
-        run: uv run scripts/generate.py "ci smoke" --out /tmp/ci.webp --size 640x400 --dry-run
+        run: uv run skills/generate-image/scripts/generate.py "ci smoke" --out /tmp/ci.webp --size 640x400 --dry-run

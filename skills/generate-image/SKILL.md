@@ -1,9 +1,9 @@
 ---
-name: generate-image-skill
-description: Generate original images for websites and apps (hero images, backgrounds, textures, spot illustrations, og:images, product shots, transparent cut-outs, edits of an existing image) and show them in the chat. Uses Codex's built-in image generation on the user's ChatGPT plan when the Codex CLI is signed in (no API key, no model download). Falls back to local FLUX.1-schnell on Apple Silicon, or to a hosted API key. Use whenever a project needs real imagery instead of stock photos, gray boxes, or placeholder URLs, or when the user asks Claude to "make an image" or "use Codex to generate an image".
+name: generate-image
+description: "Generate original images for websites and apps (hero images, backgrounds, textures, spot illustrations, og:images, product shots, transparent cut-outs, edits of an existing image) and show them in the chat. Uses Codex's built-in image generation on the user's ChatGPT plan when the Codex CLI is signed in (no API key, no model download). Falls back to local FLUX.1-schnell on Apple Silicon, or to a hosted API key. Use whenever a project needs real imagery instead of stock photos, gray boxes, or placeholder URLs, or when the user asks Claude to 'make an image' or 'use Codex to generate an image'."
 ---
 
-# generate-image-skill: images for coding agents, handed back into the chat
+# generate-image: images for coding agents, handed back into the chat
 
 Generate production-ready imagery while you build, then show it to the user.
 Images are saved straight into the project as exact-size `.webp`/`.png`/`.jpg`.
