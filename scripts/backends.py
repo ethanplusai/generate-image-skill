@@ -1,14 +1,17 @@
 """Image-generation backends.
 
-Two ways to turn a prompt into pixels, behind one interface:
+Three ways to turn a prompt into pixels, behind one interface:
 
-- ``LocalBackend`` — FLUX.1-schnell via mflux on this machine (the default;
-  free, offline). mflux is imported lazily so nothing hosted-only pays for it.
+- ``CodexBackend`` — the Codex CLI's built-in image_gen tool, billed to the
+  user's ChatGPT plan through their existing ``codex login`` (no API key, no
+  model download). The default when Codex is signed in with ChatGPT.
+- ``LocalBackend`` — FLUX.1-schnell via mflux on this machine (free, offline).
+  mflux is imported lazily so nothing else pays for it.
 - Hosted backends — offload compute to an API when you want a different model
   or aren't on a capable machine. Bring your own key (stored in the Keychain;
-  see ``keychain.py``). Two ship built in: ``ReplicateBackend`` (the same
-  flux-schnell model) and ``OpenAIBackend`` (gpt-image-1). Adding another is a
-  small class plus one entry in ``HOSTED_BACKENDS``.
+  see ``keychain.py``). Three ship built in: ``ReplicateBackend`` (the same
+  flux-schnell model), ``OpenAIBackend`` (gpt-image-2), and ``GeminiBackend``.
+  Adding another is a small class plus one entry in ``HOSTED_BACKENDS``.
 
 Each backend exposes ``generate(prompt, width, height, seed, steps) ->
 PIL.Image``. The caller crops/resizes the result to the exact requested size,
@@ -19,7 +22,11 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import shutil
+import subprocess
 import urllib.request
+from pathlib import Path
 
 from PIL import Image
 
@@ -165,7 +172,7 @@ class ReplicateBackend:
         return self._download(parse_replicate_output(prediction))
 
 
-# Sizes gpt-image-1 accepts, mapped to width/height. It has no arbitrary-size
+# Common gpt-image-2 sizes, mapped to width/height. It has no arbitrary-size
 # or seed option, so we request the nearest shape and cover-crop locally.
 OPENAI_SIZES = {
     "1024x1024": 1.0,
@@ -181,7 +188,7 @@ def nearest_openai_size(width: int, height: int) -> str:
 
 def openai_payload(prompt: str, width: int, height: int) -> dict:
     return {
-        "model": "gpt-image-1",
+        "model": "gpt-image-2",
         "prompt": prompt,
         "size": nearest_openai_size(width, height),
         "n": 1,
@@ -224,7 +231,7 @@ class OpenAIBackend:
     def generate(
         self, prompt: str, width: int, height: int, seed: int, steps: int
     ) -> Image.Image:
-        print("generating via OpenAI (gpt-image-1)...", flush=True)
+        print("generating via OpenAI (gpt-image-2)...", flush=True)
         response = self._post(openai_payload(prompt, width, height))
         raw = parse_openai_output(response)
         return Image.open(io.BytesIO(raw)).convert("RGB")
@@ -307,6 +314,211 @@ class GeminiBackend:
         return Image.open(io.BytesIO(raw)).convert("RGB")
 
 
+def codex_home() -> Path:
+    return Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+
+
+def codex_logged_in_with_chatgpt(codex_bin: str = "codex") -> bool:
+    """True if the Codex CLI is installed and signed in with a ChatGPT plan.
+
+    Image generation through Codex is billed to that plan, so this is the
+    signal for preferring the codex backend by default.
+    """
+    if not shutil.which(codex_bin):
+        return False
+    try:
+        result = subprocess.run(
+            [codex_bin, "login", "status"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    status = result.stdout + result.stderr
+    return result.returncode == 0 and "chatgpt" in status.lower()
+
+
+def codex_orientation(width: int, height: int) -> str:
+    ratio = width / height
+    if ratio > 1.15:
+        return "landscape"
+    if ratio < 1 / 1.15:
+        return "portrait"
+    return "square"
+
+
+def codex_instruction(
+    prompt: str, width: int, height: int, transparent: bool = False, refs: int = 0
+) -> str:
+    """The task handed to `codex exec`.
+
+    Codex's built-in image_gen tool picks its own pixel size, so we ask for the
+    right shape and cover-crop locally like the other hosted backends. Codex
+    does not need to save anything: we collect the file from its
+    generated_images directory ourselves.
+    """
+    lines = [
+        "Use your built-in image_gen tool to generate exactly ONE image, then stop.",
+        "Do not run shell commands, write files, or ask questions; just call the tool once.",
+        f"Shape: {codex_orientation(width, height)}, aspect ratio about "
+        f"{width}:{height} (final asset is {width}x{height} px; it will be "
+        "center-cropped to that size, so keep the subject away from the edges).",
+    ]
+    if transparent:
+        lines.append(
+            "Background: genuinely transparent (alpha channel), clean cut-out edges."
+        )
+    if refs:
+        lines.append(
+            f"The {refs} attached image(s) are references; follow the prompt for "
+            "how to use them (style, subject, or the image to edit)."
+        )
+    lines += ["", "Image prompt:", prompt]
+    return "\n".join(lines)
+
+
+def codex_command(
+    codex_bin: str, workdir: Path, instruction: str, refs: tuple = ()
+) -> list[str]:
+    command = [
+        codex_bin,
+        "exec",
+        "--json",
+        "--ephemeral",
+        "--skip-git-repo-check",
+        "--ignore-user-config",  # no user MCP servers/plugins: faster, isolated
+        "--enable",  # ...so turn the image tool on explicitly
+        "image_generation",
+        "--sandbox",
+        "read-only",
+        "--cd",
+        str(workdir),
+    ]
+    for ref in refs:
+        command += ["--image", str(ref)]
+    # "--" so a prompt starting with "-" is never read as a flag.
+    return command + ["--", instruction]
+
+
+def parse_codex_events(lines) -> tuple[str | None, str | None]:
+    """Return (thread_id, error message) from `codex exec --json` output."""
+    thread_id = None
+    errors = []
+    for line in lines:
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        kind = event.get("type")
+        if kind == "thread.started":
+            thread_id = event.get("thread_id")
+        elif kind in ("error", "turn.failed"):
+            detail = event.get("message") or (event.get("error") or {}).get("message")
+            errors.append(detail or kind)
+    return thread_id, ("; ".join(errors) if errors else None)
+
+
+IMAGE_SUFFIXES = (".png", ".webp", ".jpg", ".jpeg")
+
+
+def list_generated_images(root: Path) -> set[Path]:
+    if not root.is_dir():
+        return set()
+    return {
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES
+    }
+
+
+def pick_codex_image(root: Path, thread_id: str | None, before: set[Path]) -> Path:
+    """Find the image a codex run produced.
+
+    Prefer the run's own generated_images/<thread_id>/ folder; fall back to
+    whatever appeared since the run started.
+    """
+    candidates = list_generated_images(root / thread_id) if thread_id else set()
+    if not candidates:
+        candidates = list_generated_images(root) - before
+    if not candidates:
+        raise ValueError(
+            "Codex finished but produced no image. Check that image generation is "
+            "enabled (`codex features list | grep image_generation`) and that your "
+            "ChatGPT plan has image quota left."
+        )
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+class CodexBackend:
+    """Generate through the Codex CLI's built-in image_gen tool.
+
+    Uses the user's ChatGPT subscription via their existing `codex login`; no
+    API key is involved. Each image is one headless `codex exec` run (~30-60 s),
+    so batches run a few jobs at once.
+    """
+
+    name = "codex"
+    max_workers = 3
+    TIMEOUT = 600
+
+    def __init__(
+        self,
+        codex_bin: str = "codex",
+        transparent: bool = False,
+        refs: tuple = (),
+    ):
+        if not shutil.which(codex_bin):
+            raise ValueError(
+                "the Codex CLI is not installed. Install it with "
+                "`npm install -g @openai/codex`, then run `codex login`."
+            )
+        self._bin = codex_bin
+        self._transparent = transparent
+        self._refs = tuple(Path(ref).resolve() for ref in refs)
+        for ref in self._refs:
+            if not ref.is_file():
+                raise ValueError(f"reference image not found: {ref}")
+
+    def generate(
+        self, prompt: str, width: int, height: int, seed: int, steps: int
+    ) -> Image.Image:
+        import sys
+        import tempfile
+
+        print("generating via Codex (ChatGPT plan)...", flush=True)
+        root = codex_home() / "generated_images"
+        before = list_generated_images(root)
+        instruction = codex_instruction(
+            prompt, width, height, self._transparent, len(self._refs)
+        )
+        with tempfile.TemporaryDirectory(prefix="imagegen-codex-") as workdir:
+            try:
+                result = subprocess.run(
+                    codex_command(self._bin, Path(workdir), instruction, self._refs),
+                    capture_output=True,
+                    text=True,
+                    timeout=self.TIMEOUT,
+                    stdin=subprocess.DEVNULL,
+                )
+            except subprocess.TimeoutExpired:
+                raise ValueError(f"Codex did not finish within {self.TIMEOUT} s")
+        thread_id, error = parse_codex_events(result.stdout.splitlines())
+        if result.returncode != 0 or error:
+            detail = error or result.stderr.strip().splitlines()[-1:] or ["no detail"]
+            if "login" in str(detail).lower() or "auth" in str(detail).lower():
+                detail = f"{detail} (run `codex login` and sign in with ChatGPT)"
+            raise ValueError(f"Codex exited with an error: {detail}")
+        path = pick_codex_image(root, thread_id, before)
+        print(f"codex image: {path}", file=sys.stderr)
+        image = Image.open(path)
+        return image.convert("RGBA" if self._transparent else "RGB")
+
+
 # Each hosted provider maps to its backend class and the env-style help shown
 # when its key is missing. Add a provider by adding a class above and an entry
 # here — nothing else in the CLI needs to change.
@@ -319,10 +531,18 @@ HOSTED_PROVIDERS = tuple(HOSTED_BACKENDS)
 
 
 def get_backend(
-    name: str, *, model: str, base_model: str, api_key: str | None = None
+    name: str,
+    *,
+    model: str,
+    base_model: str,
+    api_key: str | None = None,
+    transparent: bool = False,
+    refs: tuple = (),
 ):
     if name == "local":
         return LocalBackend(model, base_model)
+    if name == "codex":
+        return CodexBackend(transparent=transparent, refs=refs)
     if name in HOSTED_BACKENDS:
         if not api_key:
             raise ValueError(
@@ -330,5 +550,5 @@ def get_backend(
                 f"    uv run scripts/generate.py --set-key {name}"
             )
         return HOSTED_BACKENDS[name](api_key)
-    options = "', '".join(("local", *HOSTED_PROVIDERS))
+    options = "', '".join(("local", "codex", *HOSTED_PROVIDERS))
     raise ValueError(f"unknown backend {name!r}: use one of '{options}'")

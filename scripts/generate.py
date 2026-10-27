@@ -1,9 +1,12 @@
 #!/usr/bin/env -S uv run --quiet
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["mflux==0.18.0"]
+# dependencies = ["pillow>=10,<13"]  # Pillow 13 breaks on Python 3.12 (lazy imports)
 # ///
-"""Generate images locally with FLUX.1-schnell for website/app assets.
+"""Generate images for website/app assets.
+
+Backends: Codex's built-in image tool on the user's ChatGPT plan (default when
+signed in), local FLUX.1-schnell on Apple Silicon, or a hosted API.
 
 Single image:
     uv run scripts/generate.py "warm photo of a pottery studio" \
@@ -14,14 +17,18 @@ Batch (loads the model once for all jobs):
 """
 
 import argparse
+import importlib.util
+import json
+import os
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import keychain
-from backends import HOSTED_PROVIDERS, get_backend
+from backends import HOSTED_PROVIDERS, codex_logged_in_with_chatgpt, get_backend
 from imagegen_core import (
     SUPPORTED_EXTENSIONS,
     Job,
@@ -37,10 +44,58 @@ from imagegen_core import (
 )
 
 DEFAULT_MODEL = "dhairyashil/FLUX.1-schnell-mflux-4bit"
+# mflux pulls in torch + MLX (~1 GB), so it is not an inline dependency: only
+# the local backend needs it, and ensure_mflux() adds it on first local use.
+MFLUX_REQUIREMENT = "mflux==0.18.0"
+REEXEC_FLAG = "IMAGEGEN_WITH_MFLUX"
 BASE_MODEL = "schnell"
 
 
+def is_apple_silicon() -> bool:
+    return sys.platform == "darwin" and platform.machine() == "arm64"
+
+
+def resolve_backend(requested: str, codex_ready, apple_silicon: bool) -> str:
+    """Turn --backend auto into a concrete backend.
+
+    Codex on the user's ChatGPT plan is preferred: better models, no download.
+    Local FLUX is the free, offline fallback on Apple Silicon.
+    """
+    if requested != "auto":
+        return requested
+    if codex_ready():
+        return "codex"
+    if apple_silicon:
+        return "local"
+    raise ValueError(
+        "no image backend is available on this machine. Either:\n"
+        "  - install the Codex CLI and sign in with ChatGPT: "
+        "`npm install -g @openai/codex && codex login`, or\n"
+        "  - store a hosted API key: `uv run scripts/generate.py --set-key openai` "
+        "and pass --backend openai"
+    )
+
+
+def ensure_mflux() -> None:
+    """Re-run this script under uv with mflux added, unless it's importable."""
+    if importlib.util.find_spec("mflux"):
+        return
+    if os.environ.get(REEXEC_FLAG):
+        sys.exit(f"error: could not install {MFLUX_REQUIREMENT} for the local backend")
+    uv = shutil.which("uv")
+    if not uv:
+        sys.exit("error: the local backend needs uv: `brew install uv`")
+    print(f"adding {MFLUX_REQUIREMENT} for the local backend (one-time)...", flush=True)
+    os.environ[REEXEC_FLAG] = "1"
+    os.execv(
+        uv,
+        [uv, "run", "--quiet", "--with", MFLUX_REQUIREMENT, __file__, *sys.argv[1:]],
+    )
+
+
 def check_environment(backend: str) -> None:
+    if backend == "codex":
+        return  # Codex runs anywhere its CLI does
     # Hosted backends offload compute, so they don't need Apple Silicon — but
     # keys live in the macOS Keychain, so they still require macOS in v1.
     if backend != "local":
@@ -53,7 +108,8 @@ def check_environment(backend: str) -> None:
     if sys.platform != "darwin" or platform.machine() != "arm64":
         sys.exit(
             "the local backend requires an Apple Silicon Mac (macOS arm64).\n"
-            "On another machine, use a hosted backend (e.g. --backend replicate).\n"
+            "On another machine, use --backend codex (ChatGPT plan) or a hosted "
+            "backend (e.g. --backend openai).\n"
             "Linux/CUDA support is on the roadmap:\n"
             "https://github.com/ethanplusai/generate-image-skill#roadmap"
         )
@@ -72,7 +128,7 @@ def check_environment(backend: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Generate images locally with FLUX.1-schnell."
+        description="Generate images with Codex (ChatGPT plan), local FLUX, or a hosted API."
     )
     parser.add_argument("prompt", nargs="?", help="image description")
     parser.add_argument("--out", help="output path (.webp, .png, or .jpg)")
@@ -91,9 +147,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--backend",
-        choices=("local", *HOSTED_PROVIDERS),
-        default="local",
-        help="generation backend (default: local mflux; hosted needs a stored key)",
+        choices=("auto", "codex", "local", *HOSTED_PROVIDERS),
+        default="auto",
+        help="generation backend (default auto: codex if signed in with ChatGPT, "
+        "else local mflux; hosted needs a stored key)",
+    )
+    parser.add_argument(
+        "--transparent",
+        action="store_true",
+        help="transparent background (codex backend; output must be .png or .webp)",
+    )
+    parser.add_argument(
+        "--ref",
+        action="append",
+        default=[],
+        metavar="IMAGE",
+        help="reference or edit-source image, repeatable (codex backend)",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="print one JSON line per saved image (path, size, seed, backend)",
     )
     parser.add_argument(
         "--set-key",
@@ -209,7 +283,26 @@ def main() -> None:
                     "use .webp, .png, or .jpg"
                 )
 
+        if args.transparent:
+            for job in jobs:
+                if job.out.suffix.lower() in (".jpg", ".jpeg"):
+                    raise ValueError(
+                        f"--transparent needs .png or .webp output, not {job.out}"
+                    )
+
         style = None if args.no_style else discover_style_config(Path.cwd())
+        backend_name = (
+            args.backend
+            if args.dry_run and args.backend == "auto"
+            else resolve_backend(
+                args.backend, codex_logged_in_with_chatgpt, is_apple_silicon()
+            )
+        )
+        if (args.transparent or args.ref) and backend_name != "codex":
+            raise ValueError(
+                "--transparent and --ref need the codex backend "
+                f"(resolved backend: {backend_name})"
+            )
     except (ValueError, OSError) as exc:
         sys.exit(f"error: {exc}")
     plans = []
@@ -231,22 +324,32 @@ def main() -> None:
                 print(f"          prompt: {job.prompt}")
         return
 
-    check_environment(args.backend)
+    check_environment(backend_name)
+    if backend_name == "local":
+        ensure_mflux()
     try:
         api_key = (
-            keychain.get_key(args.backend)
-            if args.backend in HOSTED_PROVIDERS
+            keychain.get_key(backend_name)
+            if backend_name in HOSTED_PROVIDERS
             else None
         )
         backend = get_backend(
-            args.backend,
+            backend_name,
             model=args.model,
             base_model=BASE_MODEL,
             api_key=api_key,
+            transparent=args.transparent,
+            refs=tuple(args.ref),
         )
     except ValueError as exc:
         sys.exit(f"error: {exc}")
-    run_plans(plans, backend=backend, steps=args.steps, open_after=args.open)
+    run_plans(
+        plans,
+        backend=backend,
+        steps=args.steps,
+        open_after=args.open,
+        as_json=args.json,
+    )
 
 
 def open_in_viewer(path: Path) -> None:
@@ -257,26 +360,70 @@ def open_in_viewer(path: Path) -> None:
         pass
 
 
-def run_plans(plans, backend, steps: int, open_after: bool = False) -> None:
-    for job, gen_w, gen_h, needs_upscale, outs, seeds in plans:
-        for out, seed in zip(outs, seeds):
-            try:
-                raw = backend.generate(job.prompt, gen_w, gen_h, seed, steps)
-            except (ValueError, OSError) as exc:
-                # OSError covers urllib's URLError/HTTPError; ValueError covers
-                # bad/empty provider responses. Keep it actionable, not a traceback.
-                sys.exit(f"error: image generation failed: {exc}")
-            if raw.width < job.width or raw.height < job.height:
-                print(
-                    f"warning: {out} upscaled from {raw.width}x{raw.height} "
-                    f"to {job.width}x{job.height} (source was smaller).",
-                    file=sys.stderr,
-                )
-            image = finalize_image(raw, job.width, job.height)
-            save_image(image, out)
-            print(f"wrote {out} ({job.width}x{job.height}, seed={seed})")
-            if open_after:
-                open_in_viewer(out)
+def run_plans(
+    plans, backend, steps: int, open_after: bool = False, as_json: bool = False
+) -> None:
+    tasks = [
+        (job, gen_w, gen_h, out, seed)
+        for job, gen_w, gen_h, needs_upscale, outs, seeds in plans
+        for out, seed in zip(outs, seeds)
+    ]
+
+    def generate_one(task):
+        job, gen_w, gen_h, out, seed = task
+        try:
+            return backend.generate(job.prompt, gen_w, gen_h, seed, steps)
+        except (ValueError, OSError) as exc:
+            # OSError covers urllib's URLError/HTTPError; ValueError covers
+            # bad/empty provider responses. Keep it actionable, not a traceback.
+            return exc
+
+    # Slow remote backends (codex) declare max_workers to run jobs in parallel;
+    # local mflux keeps one model in memory and stays sequential.
+    workers = min(getattr(backend, "max_workers", 1), len(tasks)) or 1
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(generate_one, tasks))
+    else:
+        results = map(generate_one, tasks)
+
+    failures = []
+    for (job, gen_w, gen_h, out, seed), raw in zip(tasks, results):
+        if isinstance(raw, Exception):
+            print(f"error: image generation failed for {out}: {raw}", file=sys.stderr)
+            failures.append(out)
+            if workers == 1:
+                break
+            continue
+        if raw.width < job.width or raw.height < job.height:
+            print(
+                f"warning: {out} upscaled from {raw.width}x{raw.height} "
+                f"to {job.width}x{job.height} (source was smaller).",
+                file=sys.stderr,
+            )
+        image = finalize_image(raw, job.width, job.height)
+        save_image(image, out)
+        if as_json:
+            print(
+                json.dumps(
+                    {
+                        "path": str(out.resolve()),
+                        "width": job.width,
+                        "height": job.height,
+                        "seed": seed,
+                        "backend": getattr(backend, "name", "unknown"),
+                    }
+                ),
+                flush=True,
+            )
+        else:
+            print(f"wrote {out.resolve()} ({job.width}x{job.height}, seed={seed})")
+        if open_after:
+            open_in_viewer(out)
+    if failures:
+        sys.exit(f"error: image generation failed for {len(failures)} image(s)")
 
 
 if __name__ == "__main__":

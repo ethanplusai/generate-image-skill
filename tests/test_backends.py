@@ -78,7 +78,7 @@ def test_nearest_openai_size_portrait():
 
 def test_openai_payload_shape():
     payload = openai_payload("a cat", 1440, 800)
-    assert payload["model"] == "gpt-image-1"
+    assert payload["model"] == "gpt-image-2"
     assert payload["prompt"] == "a cat"
     assert payload["size"] == "1536x1024"
     assert payload["n"] == 1
