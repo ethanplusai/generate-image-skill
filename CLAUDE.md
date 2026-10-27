@@ -1,12 +1,14 @@
 # generate-image-skill
 
-A public Agent Skill + self-contained CLI that generates images locally with
-FLUX.1-schnell (via mflux) on Apple Silicon. See `README.md` for the product
+A public Agent Skill + self-contained CLI that generates images for coding
+agents: through Codex's built-in image tool on the user's ChatGPT plan (default
+when signed in), locally with FLUX.1-schnell (via mflux) on Apple Silicon, or a
+hosted API. See `README.md` for the product
 overview and `SKILL.md` for the agent-facing instructions.
 
 ## Commands
 
-- **Run the test suite** (no model needed, ~0.1s): `uvx --with pillow pytest tests/ -v`
+- **Run the test suite** (no model needed, ~0.1s): `uvx --with "pillow<13" pytest tests/ -v`
 - **Environment check** (pure stdlib, runs on system python3): `python3 scripts/doctor.py`
 - **Generate an image**: `uv run scripts/generate.py "PROMPT" --out out.webp --size 1440x800`
 - **Dry-run** (validate everything without loading the model): add `--dry-run`
@@ -16,14 +18,20 @@ overview and `SKILL.md` for the agent-facing instructions.
 - `scripts/imagegen_core.py` — all pure logic (size planning, format-aware
   saving, style-config discovery, manifest parsing). No mflux import — fully
   unit-testable. Imports Pillow.
-- `scripts/generate.py` — the CLI. PEP 723 inline deps (`mflux==0.18.0`). Dispatches
-  to a backend; `--dry-run` never loads mflux.
+- `scripts/generate.py` — the CLI. PEP 723 inline deps are Pillow only (pinned
+  `<13`: Pillow 13 breaks on Python 3.12). `mflux==0.18.0` is added on demand by
+  `ensure_mflux()`, which re-execs under `uv run --with` the first time the local
+  backend is used. `--backend auto` resolves to codex (if `codex login` is
+  ChatGPT) else local. `--dry-run` never loads mflux.
 - `scripts/backends.py` — generation backends behind one `generate(...)` interface:
-  `LocalBackend` (mflux, lazy-imported) and hosted backends `ReplicateBackend`,
+  `CodexBackend` (runs `codex exec --json` headless, collects the image from
+  `$CODEX_HOME/generated_images/<thread-id>/`), `LocalBackend` (mflux,
+  lazy-imported) and hosted backends `ReplicateBackend`,
   `OpenAIBackend`, and `GeminiBackend` (stdlib `urllib`). Providers are registered in the
   `HOSTED_BACKENDS` map — add a class + one entry to add a provider. Pure helpers
   (payload builders, response parsers, size selection) are unit-tested; the live
-  hosted HTTP paths are not (they bill real accounts).
+  hosted HTTP paths are not (they bill real accounts). The live codex path is
+  not unit-tested either (uses plan quota); verify it by hand after changes.
 - `scripts/keychain.py` — macOS Keychain storage for hosted API keys via the
   `security` tool. The agent never handles raw keys: user stores once, CLI reads
   at run time. Stdlib only.

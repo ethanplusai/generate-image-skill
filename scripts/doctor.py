@@ -6,8 +6,9 @@ with plain `python3`, BEFORE uv or anything else is installed:
 
     python3 scripts/doctor.py
 
-It checks every prerequisite for local image generation and prints a
-copy-pasteable fix for whatever is missing. Exit code 0 means "ready to
+It checks the Codex backend (image generation on the user's ChatGPT plan, the
+default when available) and every prerequisite for local FLUX generation, and
+prints a copy-pasteable fix for whatever is missing. Exit code 0 means "ready to
 generate"; exit code 1 means a hard blocker needs fixing first.
 
 Must stay compatible with the stock macOS `python3` (3.9), so this file
@@ -44,6 +45,45 @@ def check_platform(system: str, machine: str) -> tuple[str, str, str | None]:
         "generate-image-skill v1 needs an Apple Silicon Mac (M1 or newer). "
         "Linux/CUDA support is on the roadmap.",
     )
+
+
+def check_codex(
+    codex_path: str | None, login_status: str, features: str
+) -> tuple[str, str, str | None]:
+    """Is the Codex CLI ready to generate images on a ChatGPT plan?"""
+    if not codex_path:
+        return (
+            WARN,
+            "Codex CLI not installed (optional, recommended)",
+            "With a ChatGPT plan, Codex generates images with no API key and no\n"
+            "    model download. To use it:\n"
+            "      npm install -g @openai/codex && codex login",
+        )
+    if "chatgpt" not in login_status.lower():
+        return (
+            WARN,
+            "Codex installed but not signed in with ChatGPT",
+            "Run `codex login` and choose \"Sign in with ChatGPT\".",
+        )
+    for line in features.splitlines():
+        parts = line.split()
+        if parts and parts[0] == "image_generation" and parts[-1] == "false":
+            return (
+                WARN,
+                "Codex image generation is turned off",
+                "Enable it: codex features enable image_generation",
+            )
+    return OK, "Codex signed in with ChatGPT; image generation ready", None
+
+
+def advisory_when_codex_ready(
+    finding: tuple[str, str, str, str | None], codex_ready: bool
+) -> tuple[str, str, str, str | None]:
+    """Local-only blockers don't block anything when Codex can generate."""
+    label, status, detail, fix = finding
+    if codex_ready and status == FAIL:
+        return label, WARN, f"{detail} (only matters for --backend local)", None
+    return finding
 
 
 def check_python(version: tuple[int, int]) -> tuple[str, str, str | None]:
@@ -157,6 +197,20 @@ def _free_disk_bytes() -> int | None:
         return None
 
 
+def _run_codex(*args: str) -> str:
+    try:
+        result = subprocess.run(
+            ["codex", *args],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            stdin=subprocess.DEVNULL,
+        )
+        return result.stdout + result.stderr if result.returncode == 0 else ""
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
 def _model_cached() -> bool:
     hf_home = os.environ.get("HF_HOME")
     roots = []
@@ -169,8 +223,19 @@ def _model_cached() -> bool:
 def gather_findings() -> list[tuple[str, str, str, str | None]]:
     findings = []
 
+    codex_path = shutil.which("codex")
+    status, detail, fix = check_codex(
+        codex_path,
+        _run_codex("login", "status") if codex_path else "",
+        _run_codex("features", "list") if codex_path else "",
+    )
+    codex_ready = status == OK
+    findings.append(("codex", status, detail, fix))
+
     status, detail, fix = check_platform(platform.system(), platform.machine())
-    findings.append(("platform", status, detail, fix))
+    findings.append(
+        advisory_when_codex_ready(("platform", status, detail, fix), codex_ready)
+    )
 
     status, detail, fix = check_python(sys.version_info[:2])
     findings.append(("python", status, detail, fix))
@@ -181,7 +246,9 @@ def gather_findings() -> list[tuple[str, str, str, str | None]]:
     free = _free_disk_bytes()
     if free is not None:
         status, detail, fix = check_disk(free)
-        findings.append(("disk", status, detail, fix))
+        findings.append(
+            advisory_when_codex_ready(("disk", status, detail, fix), codex_ready)
+        )
 
     ram = _total_ram_bytes()
     if ram is not None:
@@ -189,8 +256,18 @@ def gather_findings() -> list[tuple[str, str, str, str | None]]:
         findings.append(("memory", status, detail, fix))
 
     status, detail, fix = check_model_cache(_model_cached())
+    if codex_ready and status == WARN:
+        detail, fix = "local model not downloaded (not needed while Codex is ready)", None
     findings.append(("model", status, detail, fix))
 
+    findings.append(
+        (
+            "default backend",
+            OK,
+            "codex (your ChatGPT plan)" if codex_ready else "local (FLUX on this Mac)",
+            None,
+        )
+    )
     return findings
 
 

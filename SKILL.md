@@ -1,159 +1,158 @@
 ---
 name: generate-image-skill
-description: Generate original images locally (free, offline, no API keys) for websites and apps — hero images, backgrounds, textures, spot illustrations, og:images, placeholder photography — using FLUX.1-schnell on Apple Silicon. Use when a project needs real imagery instead of stock photos, gray boxes, or placeholder URLs. Not for logos, icons, or UI screenshots.
+description: Generate original images for websites and apps (hero images, backgrounds, textures, spot illustrations, og:images, product shots, transparent cut-outs, edits of an existing image) and show them in the chat. Uses Codex's built-in image generation on the user's ChatGPT plan when the Codex CLI is signed in (no API key, no model download). Falls back to local FLUX.1-schnell on Apple Silicon, or to a hosted API key. Use whenever a project needs real imagery instead of stock photos, gray boxes, or placeholder URLs, or when the user asks Claude to "make an image" or "use Codex to generate an image".
 ---
 
-# generate-image-skill — local image generation for coding agents
+# generate-image-skill: images for coding agents, handed back into the chat
 
-Generate production-ready imagery while you build, on the user's own machine.
-Free, offline, Apache-2.0-licensed model, no API keys.
+Generate production-ready imagery while you build, then show it to the user.
+Images are saved straight into the project as exact-size `.webp`/`.png`/`.jpg`.
 
-## When to use — and when NOT to
+## Backends: who actually makes the pixels
+
+| Backend | What it is | Cost | Needs |
+|---|---|---|---|
+| `codex` (**default when available**) | Codex CLI's built-in `image_gen` tool (OpenAI's GPT Image) | the user's ChatGPT plan | `codex` installed and `codex login` with ChatGPT |
+| `local` | FLUX.1-schnell via mflux | free, offline | Apple Silicon Mac, ~7 GB one-time model download |
+| `openai` / `gemini` / `replicate` | hosted APIs | per image, on the user's API account | a key stored with `--set-key` |
+
+`--backend auto` (the default) picks `codex` if Codex is signed in with ChatGPT,
+otherwise `local`. You (Claude) cannot call Codex's image tool directly; this
+skill runs `codex exec` headless for you, then collects the finished file from
+`~/.codex/generated_images/` and crops it to the exact size you asked for.
+
+## When to use and when NOT to
 
 **Generate:** hero images, section backgrounds, textures, spot illustrations,
-og:images (1200x630), placeholder/editorial photography, empty-state art.
+og:images (1200x630), product/editorial photography, empty-state art,
+transparent cut-outs, and edits or variations of an existing image.
 
-**Do NOT generate:** logos, icons, UI screenshots, or text-heavy graphics.
-Diffusion models render text and precise geometry badly. Use SVG for
-logos/icons and real screenshots for UI. If an image needs more than 1–2
-words of legible text, build it in HTML/CSS instead.
+**Don't generate:** logos, icons, and UI screenshots. Use SVG for logos and
+icons, and real screenshots for UI. On `codex` a short headline in the image
+renders well. On `local` (FLUX), keep legible text to 1–2 words at most. In
+both cases, put real page copy in HTML/CSS over the image.
 
-## Setup — DO THIS FIRST (before the first generation in a session)
-
-Run the environment check. It is pure-stdlib and needs no dependencies — plain
-`python3` works even on a fresh machine:
+## Setup: do this first (once per session)
 
 ```bash
 python3 <SKILL_DIR>/scripts/doctor.py
 ```
 
-Read its output and act on it before generating — do not make the user
-troubleshoot:
+It needs only the system `python3`. Act on what it reports; don't make the
+user troubleshoot:
 
-- **`✗ uv is not installed`** — `uv` is the only thing that must be installed;
-  it runs the generator and manages Python + all dependencies automatically.
-  Offer to install it for the user: run `brew install uv` (or, if Homebrew is
-  absent, `curl -LsSf https://astral.sh/uv/install.sh | sh`), then re-run the
-  doctor. If a `uv run …` command ever fails with `uv: command not found`,
-  this is the cause.
-- **`✗ unsupported platform`** — generate-image-skill v1 needs an Apple Silicon Mac.
-  Tell the user plainly; do not attempt to generate.
-- **`✗ only N GB free disk`** — the model needs ~7 GB; ask the user to free
-  space first.
-- **`! model not downloaded yet`** — normal on first use; just warn the user
-  the first image will take a few extra minutes for the one-time ~7 GB
-  download.
+- **`! Codex CLI not installed` / `not signed in with ChatGPT`**: if the user
+  has a ChatGPT plan, this is the best backend. Offer `npm install -g
+  @openai/codex`. The sign-in (`codex login`) opens a browser, so the **user**
+  runs it themselves.
+- **`✗ uv is not installed`**: offer `brew install uv` (or `curl -LsSf
+  https://astral.sh/uv/install.sh | sh`), then re-run the doctor.
+- **Local-only items** (`platform`, `disk`, `model not downloaded`) only
+  matter for `--backend local`. When Codex is ready they are advisory.
 
-When the doctor reports "Ready to generate," proceed. You only need to run it
-once per session (or whenever a `uv run` command fails unexpectedly).
+When it says "Ready to generate", go ahead. The doctor also prints the backend
+`auto` will use.
 
-## How to run
+## How to run: in the background
 
-The script lives in THIS skill's directory (the directory containing this
-SKILL.md), not in the user's project. Use the skill's base directory for the
-path:
+The script lives in THIS skill's directory, not the user's project:
 
 ```bash
-uv run <SKILL_DIR>/scripts/generate.py "warm photo of a pottery studio" \
-    --out public/hero.webp --size 1440x800
+uv run <SKILL_DIR>/scripts/generate.py "PROMPT" --out public/hero.webp --size 1440x800 --json
 ```
 
-**TIMEOUTS — important:** each image takes ~40–90 s; the FIRST EVER run also
-downloads ~7 GB (several minutes). Set your command timeout to at least 10
-minutes, or run in the background and poll. Do not let a default 2-minute
-timeout kill a working generation.
+**Run it as a background task.** If you have a background option (Claude
+Code: Bash with `run_in_background: true`), use it. You'll be notified when it
+exits, so keep working meanwhile and don't poll. Timing: `codex` takes ~30–60 s
+per image; `local` takes ~40–90 s, plus several minutes for the ~7 GB model on
+first use. If you must run it in the foreground, set the timeout to at least
+10 minutes.
 
-Requirements: Apple Silicon Mac and `uv` — the `doctor.py` check above
-verifies both and tells you exactly how to fix whatever is missing. The
-generator also exits with a clear message on unsupported platforms.
+`--json` prints one line per saved image, e.g.
+`{"path": "/abs/public/hero.webp", "width": 1440, "height": 800, "seed": 1, "backend": "codex"}`.
+Use those absolute paths in the next steps.
+
+## Hand the image back: always do both
+
+1. **Look at it yourself.** Read the image file before wiring it into the page.
+   If it's wrong, regenerate with a more concrete prompt; don't ship unseen
+   images.
+2. **Show it to the user in the chat.** Don't leave a path buried in tool
+   output. Use the best option the environment has:
+   - **A tool that sends or renders files to the user** (in the Claude desktop
+     app: `SendUserFile` with `display: "render"`). This shows the image
+     inline, the way Codex does. Prefer this whenever it exists.
+   - Otherwise put a markdown image in your reply,
+     `![hero](/abs/path/hero.webp)`, **and** the plain absolute path. Orcha and
+     most IDE chats turn the path into a clickable link.
+   - Terminal-only: `--open` opens results in Preview, and `imgcat <path>`
+     (iTerm2) or `kitten icat <path>` (Kitty/Ghostty/WezTerm) render inline.
 
 ## Flags
 
 | Flag | Meaning |
 |---|---|
-| `--out PATH` | Output file; format from extension: `.webp` (best for web), `.png`, `.jpg`/`.jpeg` (both work) |
-| `--size WxH` | Exact output pixels, e.g. `1440x800`. Oversized requests are upscaled with a warning |
-| `--seed N` | Reproducible output; same seed + prompt = same image |
-| `--count N` | N candidates as `name-1.webp`, `name-2.webp`, … with sequential seeds |
-| `--steps N` | Inference steps, default 4 — more steps is rarely worth it on schnell |
-| `--model REPO` | Override the HF model repo (advanced; default is the pinned 4-bit schnell) |
-| `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}` — loads the model once for all jobs |
+| `--out PATH` | Output file; format from extension: `.webp` (best for web), `.png`, `.jpg` |
+| `--size WxH` | Exact output pixels, e.g. `1440x800`. The image is cover-cropped to it |
+| `--backend` | `auto` (default), `codex`, `local`, `openai`, `gemini`, `replicate` |
+| `--transparent` | Real transparent background (`codex` only; `.png` or `.webp` output) |
+| `--ref IMAGE` | Reference or edit-source image, repeatable (`codex` only). Say in the prompt how to use it ("edit this photo: replace only the sky") |
+| `--count N` | N candidates as `name-1.webp`, `name-2.webp`, … |
+| `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}`. `codex` runs 3 jobs at once; `local` loads the model once |
+| `--json` | Machine-readable result line per image |
+| `--seed N` | Reproducible output on `local`/`replicate`; `codex` ignores seeds |
+| `--steps N`, `--model REPO` | Local FLUX tuning (advanced) |
 | `--no-style` | Ignore the project's `imagegen.toml` |
-| `--backend` | `local` (default, free/offline) or a hosted provider: `replicate`, `openai`, `gemini` |
-| `--open` | Open each result in the Mac's default viewer after saving |
-| `--dry-run` | Print the plan (styled prompts, sizes, seeds) without loading the model |
-
-## Hosted models (optional — bring your own key)
-
-Local generation is the default and needs no key. If the user wants to offload
-compute to a hosted service (or isn't on a capable Mac), there are opt-in hosted
-backends. Three ship built in: `replicate` (the same flux-schnell model),
-`openai` (gpt-image-1), and `gemini` (gemini-2.5-flash-image). More can be added
-in `scripts/backends.py`.
-
-**The key is stored safely, and you (the agent) must never handle it:**
-
-1. The **user** runs this once and types their key at a hidden prompt. Do NOT
-   ask them to paste the key into the chat, and never run this with a key inline
-   on the command line:
-   ```bash
-   uv run <SKILL_DIR>/scripts/generate.py --set-key replicate   # or: openai
-   ```
-   The key goes into the macOS Keychain (encrypted, access-controlled). This
-   command must be run by the user in a real terminal — it refuses to run
-   non-interactively, so you cannot (and must not) run it for them.
-2. Then generate with `--backend replicate` (or `--backend openai`). The CLI
-   reads the key from the Keychain itself, so the secret never enters your
-   context, a log, or the shell history.
-
-`--list-keys` shows which providers have a key stored; `--delete-key <provider>`
-removes one. Hosted generation bills a small per-image fee to the user's account
-and needs a network connection; local stays free and offline.
+| `--open` | Open each result in the Mac's default viewer |
+| `--dry-run` | Print the plan (styled prompts, sizes) without generating |
 
 ## Workflow rules
 
-1. **Plan all assets first, generate in one `--batch`** — the model loads
-   once (~20 s) per invocation; batching amortizes it.
-2. **Generate 1–2 candidates, not 10.** Use `--count 2` when unsure.
-3. **ALWAYS view the output** (read the image file) before wiring it into
-   the page. If it's bad, regenerate with a different seed or a more
-   concrete prompt — don't ship unseen images.
-4. **Record the seed** you shipped (e.g. in the asset's git commit message)
-   so the image can be regenerated or varied later.
+1. **Plan all assets first, then generate them in one `--batch`**, in the
+   background.
+2. **Generate 1–2 candidates, not 10.** Each `codex` image uses the user's plan
+   quota; each `local` image costs about a minute.
+3. **Always view, then show** (see "Hand the image back").
+4. **Record what you shipped** in the commit message: the prompt, the backend,
+   and the seed when the backend supports one.
 5. **Set up style once:** if the project has no `imagegen.toml`, consider
-   creating one (copy `imagegen.example.toml` from this skill's directory)
-   so all assets share an art direction.
+   creating one (copy `imagegen.example.toml` from this skill's directory) so
+   all assets share an art direction.
 
-## Writing good prompts — be specific and detailed
+## Writing good prompts
 
-Flux rewards detailed, natural-language scene descriptions and punishes terse
-tag soup. A one-word prompt gives a generic, disappointing result. Every prompt
-should name, in a full sentence or two:
+Both backends reward specific, concrete descriptions and punish one-word
+prompts. Every prompt should cover:
 
-- **Subject** — the concrete thing ("handmade ceramic bowls", not "something nice")
-- **Setting / context** — where it is, what surrounds it
-- **Lighting** — direction and quality ("soft morning light from the left", "hard studio spotlight")
-- **Mood / palette** — the feeling and the colors ("calm, muted earthy tones")
-- **Composition** — framing and negative space, *especially where text will
-  overlay*: "subject on the right third, empty space on the left for a headline"
+- **Subject**: the concrete thing ("handmade ceramic bowls", not "something nice")
+- **Setting**: where it is and what surrounds it
+- **Lighting**: direction and quality ("soft morning light from the left")
+- **Mood and palette**: the feeling and the colors
+- **Composition**: framing and negative space, *especially where text will
+  overlay* ("subject on the right third, empty space on the left for a headline")
 
-For photographic assets, add shot type and depth of field ("wide establishing
-shot, shallow depth of field"). For illustrations, specify a flat style, simple
-shapes, and a solid background.
+On `codex`, a short labeled spec works especially well. This is the format
+Codex's own image skill uses:
+
+```text
+Use case: product-mockup
+Asset type: landing page hero
+Primary request: a ceramic coffee mug on a linen tablecloth
+Style/medium: clean product photography
+Composition/framing: wide, mug on the right third, empty space on the left for copy
+Lighting/mood: soft window light, calm morning
+Constraints: no logos, no watermark
+```
+
+For edits with `--ref`, list what must stay the same ("change only the
+background; keep the product and its edges unchanged").
 
 **Weak → strong:**
 
 > ❌ `a coffee shop`
 > ✅ `warm natural-light photograph of a cozy independent coffee shop interior at golden hour, exposed brick walls, a barista blurred in the background, steam rising from a cup in the foreground, shallow depth of field, inviting mood`
 
-Never ask for legible text beyond 1–2 words — diffusion renders it as gibberish.
-Put real copy in HTML/CSS over the image.
-
-## Choosing dimensions — always set `--size` deliberately
-
-Pick the size from the asset's real role in the layout, never a default. Match
-the aspect ratio to where the image will actually sit, so you aren't cropping
-blind later.
+## Choosing dimensions: always set `--size` deliberately
 
 | Asset | Size |
 |---|---|
@@ -164,21 +163,21 @@ blind later.
 | Square spot illustration | `800x800` |
 | Portrait / mobile hero | `800x1200` |
 
-## Showing the result to the user
+## Hosted API keys (optional)
 
-After you generate and view an image yourself, surface it to the user — don't
-leave a file path buried in tool output. Use whatever the current environment
-supports, in order of preference:
+Only needed for `openai`, `gemini`, or `replicate`. The **user** stores a key
+once at a hidden prompt; never ask them to paste a key into the chat:
 
-1. **Orcha:** `open "orcha://file?path=<ABSOLUTE_PATH>"` opens the image in
-   Orcha's in-app file viewer.
-2. **`--open` flag:** pass `--open` to the generator and it opens each result in
-   the Mac's default image viewer (Preview) right after saving.
-3. **Image-capable terminals:** `imgcat <path>` (iTerm2) or `kitten icat <path>`
-   (Kitty / Ghostty / WezTerm) render the image inline.
-4. **Always** also print the path so the user can open it themselves.
+```bash
+uv run <SKILL_DIR>/scripts/generate.py --set-key openai   # or: gemini, replicate
+```
+
+The key goes into the macOS Keychain, and the CLI reads it at run time. This
+command refuses to run non-interactively, so you can't run it for them.
+`--list-keys` shows which providers have a key; `--delete-key <provider>`
+removes one.
 
 ## Reference
 
-See `reference/prompting.md` in this skill's directory for per-asset-type prompt
-recipes (hero, texture, illustration, og:image, photography).
+See `reference/prompting.md` in this skill's directory for per-asset-type
+prompt recipes (hero, texture, illustration, og:image, photography).

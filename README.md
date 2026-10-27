@@ -5,11 +5,12 @@
 <h1 align="center">generate-image-skill</h1>
 
 <p align="center">
-  <strong>Give your coding agent the power to generate its own images — locally, free, no API keys required.</strong>
+  <strong>Give your coding agent the power to generate its own images — with your ChatGPT plan through Codex, or locally for free. No API keys required.</strong>
 </p>
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> ·
+  <a href="#use-your-chatgpt-plan-codex">Codex</a> ·
   <a href="#is-it-really-free">Is it really free?</a> ·
   <a href="#setup--troubleshooting">Setup</a> ·
   <a href="SKILL.md">How agents use it</a> ·
@@ -20,9 +21,17 @@
 
 Your agent is building a website or app and needs a hero image, a background
 texture, an `og:image`, or a spot illustration. Instead of shipping gray
-placeholder boxes or hotlinking stock photos, it generates the real asset on
-your machine in about 40 seconds — using [FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell)
-running through [mflux](https://github.com/filipstrand/mflux) on Apple Silicon.
+placeholder boxes or hotlinking stock photos, it generates the real asset in
+under a minute, saves it into your project at the exact size the layout needs,
+and shows it to you in the chat.
+
+- **If you have [Codex](https://github.com/openai/codex) signed in with ChatGPT**,
+  images come from Codex's built-in image generation, billed to your ChatGPT
+  plan. That means OpenAI's image model inside Claude Code or any other agent,
+  with no API key and no model download.
+- **Otherwise** it runs [FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell)
+  on your own Mac through [mflux](https://github.com/filipstrand/mflux): free
+  and offline.
 
 **generate-image-skill is two things in one repo:**
 
@@ -77,13 +86,46 @@ uv run scripts/generate.py \
     --out hero.webp --size 1440x800
 ```
 
-The first run downloads the model (~7 GB, one time, no account needed). After
-that, generation is fully offline. That's the whole setup — see
+If Codex is signed in with ChatGPT, that's it: the image comes from Codex in
+~30–60 s. Otherwise the local backend's first run downloads the FLUX model
+(~7 GB, one time, no account needed), and after that generation is fully
+offline. That's the whole setup. See
 [Installing per agent](#installing-per-agent) for Codex and others.
+
+## Use your ChatGPT plan (Codex)
+
+Codex ships a built-in image tool that runs on your ChatGPT subscription.
+Claude can't call it directly, so this skill does it for you: it runs `codex
+exec` headless, collects the finished file from `~/.codex/generated_images/`,
+crops it to the exact size, and saves it as `.webp`/`.png`/`.jpg`.
+
+```bash
+npm install -g @openai/codex   # once
+codex login                    # choose "Sign in with ChatGPT"
+python3 scripts/doctor.py      # should report: default backend: codex
+```
+
+You don't need any new flags. `--backend auto` (the default) uses Codex
+whenever it is signed in with ChatGPT and falls back to local FLUX when it
+isn't. Codex also adds two things the other backends lack:
+
+```bash
+# Transparent cut-out
+uv run scripts/generate.py "a ceramic mug, product shot" --out mug.png --size 800x800 --transparent
+
+# Edit or restyle an existing image
+uv run scripts/generate.py "replace only the sky with a warm sunset; keep everything else" \
+    --ref photo.jpg --out photo-sunset.webp --size 1440x800
+```
+
+Each image uses your plan's image quota. Codex runs read-only, in a temporary
+folder, and without your MCP servers or plugins. Batches run three Codex jobs
+at a time.
 
 ## Is it really free?
 
-Yes. Genuinely, entirely free — this trips people up, so to be concrete:
+The local backend is. (The `codex` backend uses your ChatGPT plan's quota; the
+`openai`/`gemini`/`replicate` backends bill your API account.) Genuinely, entirely free — this trips people up, so to be concrete:
 
 | | |
 |---|---|
@@ -99,9 +141,9 @@ Yes. Genuinely, entirely free — this trips people up, so to be concrete:
 ## Setup & troubleshooting
 
 **The only thing you need to install is [`uv`](https://docs.astral.sh/uv/).**
-It bootstraps the right Python, installs mflux and Pillow automatically (pinned
-versions, declared inline in the script), and the model self-downloads on first
-run. You never manage a virtualenv or a `requirements.txt`.
+It bootstraps the right Python and Pillow automatically (declared inline in
+the script). mflux and its ML stack install only the first time you actually
+use the local backend, and the model self-downloads on that first local run. You never manage a virtualenv or a `requirements.txt`.
 
 **Start with the doctor.** It's pure standard library, so it runs on a stock
 Mac with zero setup and tells you exactly what (if anything) to fix:
@@ -110,13 +152,14 @@ Mac with zero setup and tells you exactly what (if anything) to fix:
 $ python3 scripts/doctor.py
 generate-image-skill — environment check
 
+  ✓ codex: Codex signed in with ChatGPT; image generation ready
   ✓ platform: Apple Silicon Mac
   ✓ python: Python 3.11
   ✓ uv: uv (/opt/homebrew/bin/uv)
   ✓ disk: 181 GB free disk
   ✓ memory: 48 GB RAM
-  ! model: model not downloaded yet
-      The first generation downloads ~7 GB from Hugging Face (one time).
+  ! model: local model not downloaded (not needed while Codex is ready)
+  ✓ default backend: codex (your ChatGPT plan)
 
 Ready to generate. The ! notes above are advisory, not blockers.
 ```
@@ -130,7 +173,9 @@ walks you through any fix — that's built into [SKILL.md](SKILL.md).
 | Symptom | Cause & fix |
 |---|---|
 | `uv: command not found` | `uv` isn't installed. `brew install uv` — or, without Homebrew, `curl -LsSf https://astral.sh/uv/install.sh \| sh`. Then re-run the doctor. |
-| `the local backend requires an Apple Silicon Mac` | The default (local) backend needs an M1+ Mac. On an Intel Mac, use a hosted backend — [`--backend replicate`](#hosted-models-bring-your-own-key). Local Linux/Windows support is on the [Roadmap](#roadmap). |
+| `the local backend requires an Apple Silicon Mac` | Local FLUX needs an M1+ Mac. Anywhere else, use [Codex](#use-your-chatgpt-plan-codex) or a [hosted backend](#hosted-models-bring-your-own-key). |
+| `Codex exited with an error … codex login` | Codex's sign-in expired, or it isn't signed in with ChatGPT. Run `codex login`. |
+| `Codex finished but produced no image` | Usually the plan's image quota has run out, or image generation is off: `codex features enable image_generation`. |
 | First run "hangs" for minutes | It's downloading the ~7 GB model. Watch progress; it only happens once. Give any wrapping command a 10-minute timeout. |
 | Generation is slow / machine swaps | Under ~24 GB of RAM, the model may swap. It still works, just slower. |
 | Want the disk space back | See [Uninstall](#uninstall). |
@@ -145,8 +190,12 @@ Point your agent at [`SKILL.md`](SKILL.md). It teaches the agent to:
   illustrations, `og:image`s, editorial photography) and avoid the wrong ones
   (logos, icons, UI, anything text-heavy → those should be SVG or real screenshots);
 - run the environment doctor first and help you fix any setup gap;
-- batch a page's assets into one model load, view each result before shipping
-  it, and keep a consistent art direction across a project.
+- run generation as a background task, so the agent keeps working while
+  images render;
+- look at every result before shipping it, then **show it to you in the
+  chat** (inline in the Claude desktop app, or as a markdown image or link
+  elsewhere);
+- batch a page's assets and keep a consistent art direction across a project.
 
 Prompt recipes per asset type live in [`reference/prompting.md`](reference/prompting.md).
 
@@ -160,13 +209,16 @@ uv run scripts/generate.py --batch manifest.json
 | Flag | Meaning |
 |---|---|
 | `--out PATH` | Output file. Format from extension: `.webp` (best for web), `.png`, `.jpg`/`.jpeg`. |
-| `--size WxH` | Exact output pixels, e.g. `1440x800`. Larger-than-native requests are upscaled with a warning. |
-| `--seed N` | Reproducible output — same seed + prompt = same image. |
-| `--count N` | Generate N candidates (`hero-1.webp`, `hero-2.webp`, …) with sequential seeds. |
-| `--steps N` | Inference steps (default 4; rarely worth raising on schnell). |
-| `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}` — loads the model **once** for all jobs. |
+| `--size WxH` | Exact output pixels, e.g. `1440x800`. The image is cover-cropped to it (and upscaled with a warning if the source is smaller). |
+| `--backend NAME` | `auto` (default: `codex` if signed in with ChatGPT, else `local`), `codex`, `local`, `openai`, `gemini`, `replicate`. |
+| `--transparent` | Transparent background (`codex`; `.png`/`.webp` output). |
+| `--ref IMAGE` | Reference or edit-source image, repeatable (`codex`). |
+| `--json` | Print one JSON line per saved image: absolute path, size, seed, backend. |
+| `--seed N` | Reproducible output on `local`/`replicate` (same seed + prompt = same image). `codex` ignores it. |
+| `--count N` | Generate N candidates (`hero-1.webp`, `hero-2.webp`, …). |
+| `--steps N` | Local inference steps (default 4; rarely worth raising on schnell). |
+| `--batch FILE` | JSON array of `{prompt, out, size, seed?, count?}`. Local loads the model once; `codex` runs 3 jobs in parallel. |
 | `--no-style` | Ignore the project's `imagegen.toml`. |
-| `--backend NAME` | `local` (default, free/offline) or a hosted provider — `replicate`, `openai`, `gemini`. |
 | `--open` | Open each result in the Mac's default image viewer after saving. |
 | `--dry-run` | Print the plan (styled prompts, sizes, seeds) without loading the model. |
 
@@ -187,17 +239,16 @@ Copy [`imagegen.example.toml`](imagegen.example.toml) to get started, or pass
 
 ## Hosted models (bring your own key)
 
-Local generation is the default — free, offline, no key. But the backend is
-pluggable: if you'd rather offload the compute (or you're not on a capable Mac,
-or you want a specific model), point `--backend` at a hosted API and bring your
-own key.
+Codex and local generation need no key. If you'd rather pay per image on an API
+account, or want a specific model, point `--backend` at a hosted API and bring
+your own key.
 
 **Providers built in today:**
 
 | `--backend` | Runs | Get a key |
 |---|---|---|
 | `replicate` | the **same** flux-schnell model, hosted | [replicate.com](https://replicate.com) |
-| `openai` | OpenAI `gpt-image-1` | [platform.openai.com](https://platform.openai.com) |
+| `openai` | OpenAI `gpt-image-2` | [platform.openai.com](https://platform.openai.com) |
 | `gemini` | Google `gemini-2.5-flash-image` | [aistudio.google.com](https://aistudio.google.com/apikey) |
 
 **Your key is stored in the macOS Keychain, and a coding agent driving this
@@ -217,11 +268,11 @@ uv run scripts/generate.py --delete-key replicate   # remove one
 ```
 
 Hosted generation bills a small per-image fee to your provider account and needs
-a network connection; the default local backend has neither cost.
+a network connection.
 
 ### Adding another provider
 
-The two above are just the ones that ship built in — the backend layer is
+The providers above are just the ones that ship built in — the backend layer is
 provider-agnostic. Adding one (Black Forest Labs' FLUX API, Fal, Google Imagen,
 Stability, …) is a small change in [`scripts/backends.py`](scripts/backends.py):
 write a class with a `generate(prompt, width, height, seed, steps) -> PIL.Image`
@@ -231,7 +282,8 @@ Open an issue if you'd like one added.
 
 ## How it works
 
-- **Model:** FLUX.1-schnell, 4-bit quantized ([`dhairyashil/FLUX.1-schnell-mflux-4bit`](https://huggingface.co/dhairyashil/FLUX.1-schnell-mflux-4bit)), ~7 GB.
+- **Codex backend:** runs `codex exec --json --ephemeral --sandbox read-only` with a one-shot instruction to call the built-in `image_gen` tool, reads the thread id from the event stream, and picks the image up from `~/.codex/generated_images/<thread-id>/`.
+- **Local model:** FLUX.1-schnell, 4-bit quantized ([`dhairyashil/FLUX.1-schnell-mflux-4bit`](https://huggingface.co/dhairyashil/FLUX.1-schnell-mflux-4bit)), ~7 GB.
 - **Runtime:** [mflux](https://github.com/filipstrand/mflux) on Apple's MLX — native Apple Silicon acceleration.
 - **Sizing:** images generate at up to ~1.25 MP (dimensions rounded to multiples of 16), then are cover-cropped or upscaled to the exact pixels you asked for.
 - **Distribution:** the CLI declares its dependencies inline ([PEP 723](https://peps.python.org/pep-0723/)), so `uv run` sets up an isolated, version-pinned environment on the fly. Nothing to `pip install`.
@@ -241,7 +293,10 @@ per 1024×768 image, ~16 GB peak memory.
 
 ## Requirements
 
-**Local backend (default — free, offline):**
+**Codex backend (default when available):** the [Codex CLI](https://github.com/openai/codex)
+signed in with a ChatGPT plan, plus `uv`. Any OS Codex runs on; no GPU or model download.
+
+**Local backend (free, offline):**
 
 - Apple Silicon Mac (M1 or newer). 24 GB+ RAM recommended; 16 GB works but may swap.
 - [`uv`](https://docs.astral.sh/uv/) — `brew install uv`
@@ -269,10 +324,9 @@ rm -rf ~/.cache/huggingface/hub/models--dhairyashil--FLUX.1-schnell-mflux-4bit
 
 ## Roadmap
 
-- Background removal (transparent PNGs)
-- CUDA / Linux / Windows backend behind the same CLI
+- Transparent output and reference images for the local backend (Codex has both today)
+- CUDA / Linux / Windows local backend behind the same CLI
 - Warm daemon mode (skip the ~20 s model load per invocation)
-- img2img / style-reference images
 - Evaluate FLUX.2-klein as an alternative default model
 
 Contributions welcome.

@@ -111,3 +111,32 @@ def test_gather_findings_runs_on_this_machine():
     findings = doctor.gather_findings()
     labels = {label for label, _, _, _ in findings}
     assert {"platform", "python", "uv", "model"} <= labels
+
+
+def test_check_codex_missing_is_advisory():
+    status, detail, fix = doctor.check_codex(None, "", "")
+    assert status == WARN and "npm install -g @openai/codex" in fix
+
+
+def test_check_codex_needs_chatgpt_login():
+    status, _, fix = doctor.check_codex("/bin/codex", "Logged in using an API key", "")
+    assert status == WARN and "codex login" in fix
+
+
+def test_check_codex_feature_disabled():
+    features = "image_generation                         stable             false\n"
+    status, _, fix = doctor.check_codex("/bin/codex", "Logged in using ChatGPT", features)
+    assert status == WARN and "codex features enable image_generation" in fix
+
+
+def test_check_codex_ready():
+    features = "image_generation                         stable             true\n"
+    status, _, _ = doctor.check_codex("/bin/codex", "Logged in using ChatGPT", features)
+    assert status == OK
+
+
+def test_local_blockers_become_advisory_when_codex_ready():
+    finding = ("platform", FAIL, "unsupported platform (Linux/x86_64)", "need a Mac")
+    label, status, detail, fix = doctor.advisory_when_codex_ready(finding, True)
+    assert status == WARN and "--backend local" in detail and fix is None
+    assert doctor.advisory_when_codex_ready(finding, False) == finding

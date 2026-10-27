@@ -89,3 +89,65 @@ def test_open_in_viewer_swallows_oserror(monkeypatch):
 
     monkeypatch.setattr(generate.subprocess, "run", boom)
     generate.open_in_viewer(Path("/tmp/x.webp"))  # must not raise
+
+
+def test_backend_defaults_to_auto():
+    args = generate.build_parser().parse_args(["p", "--out", "o.webp", "--size", "10x10"])
+    assert args.backend == "auto"
+
+
+def test_resolve_backend_prefers_codex():
+    assert generate.resolve_backend("auto", lambda: True, apple_silicon=True) == "codex"
+
+
+def test_resolve_backend_falls_back_to_local():
+    assert generate.resolve_backend("auto", lambda: False, apple_silicon=True) == "local"
+
+
+def test_resolve_backend_explicit_wins():
+    assert generate.resolve_backend("local", lambda: True, apple_silicon=True) == "local"
+
+
+def test_resolve_backend_nothing_available():
+    with pytest.raises(ValueError, match="codex login"):
+        generate.resolve_backend("auto", lambda: False, apple_silicon=False)
+
+
+def test_check_environment_codex_runs_anywhere(monkeypatch):
+    monkeypatch.setattr(generate.sys, "platform", "linux")
+    generate.check_environment("codex")  # must not exit
+
+
+def test_run_plans_json_output(tmp_path, capsys):
+    import json
+
+    out = tmp_path / "o.png"
+    backend = FakeBackend(Image.new("RGB", (64, 64), "red"))
+    generate.run_plans(_one_plan(out, 64, 64, seed=3), backend=backend, steps=4, as_json=True)
+    record = json.loads(capsys.readouterr().out.strip())
+    assert record["path"] == str(out.resolve()) and record["seed"] == 3
+
+
+def test_run_plans_parallel_keeps_going_after_failure(tmp_path, capsys):
+    class Flaky:
+        max_workers = 3
+
+        def generate(self, prompt, width, height, seed, steps):
+            if seed == 2:
+                raise ValueError("quota")
+            return Image.new("RGB", (32, 32), "blue")
+
+    job = generate.Job(prompt="p", out=tmp_path / "o.png", width=32, height=32, count=3)
+    outs = generate.numbered_outputs(job.out, 3)
+    plans = [(job, 32, 32, False, outs, [1, 2, 3])]
+    with pytest.raises(SystemExit):
+        generate.run_plans(plans, backend=Flaky(), steps=4)
+    assert outs[0].exists() and outs[2].exists() and not outs[1].exists()
+    assert "quota" in capsys.readouterr().err
+
+
+def test_transparent_png_keeps_alpha(tmp_path):
+    out = tmp_path / "cut.png"
+    backend = FakeBackend(Image.new("RGBA", (64, 64), (255, 0, 0, 0)))
+    generate.run_plans(_one_plan(out, 64, 64), backend=backend, steps=4)
+    assert Image.open(out).mode == "RGBA"

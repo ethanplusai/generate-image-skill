@@ -16,6 +16,6 @@ jobs:
         with:
           enable-cache: false # deps are inline (PEP 723); no lockfile to cache
       - name: Unit tests (no model)
-        run: uvx --with pillow pytest tests/ -v
+        run: uvx --with "pillow<13" pytest tests/ -v
       - name: CLI dry-run (no model)
         run: uv run scripts/generate.py "ci smoke" --out /tmp/ci.webp --size 640x400 --dry-run
