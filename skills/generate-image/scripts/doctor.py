@@ -42,7 +42,7 @@ def check_platform(system: str, machine: str) -> tuple[str, str, str | None]:
     return (
         FAIL,
         f"unsupported platform ({system}/{machine})",
-        "generate-image-skill v1 needs an Apple Silicon Mac (M1 or newer). "
+        "The local FLUX backend needs an Apple Silicon Mac (M1 or newer). "
         "Linux/CUDA support is on the roadmap.",
     )
 

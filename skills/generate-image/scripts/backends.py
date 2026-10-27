@@ -547,7 +547,7 @@ def get_backend(
         if not api_key:
             raise ValueError(
                 f"no {name} API key is stored. Add one first:\n"
-                f"    uv run scripts/generate.py --set-key {name}"
+                f"    uv run <skill dir>/scripts/generate.py --set-key {name}"
             )
         return HOSTED_BACKENDS[name](api_key)
     options = "', '".join(("local", "codex", *HOSTED_PROVIDERS))

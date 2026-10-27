@@ -1,0 +1,14 @@
+name: Feature request
+description: A backend, flag, or workflow you'd like
+labels: [enhancement]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What are you building when you need this?
