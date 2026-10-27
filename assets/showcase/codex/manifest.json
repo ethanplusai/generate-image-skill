@@ -1,0 +1,22 @@
+[
+ {
+  "prompt": "warm natural-light photograph of a sunlit pottery studio, shelves of handmade ceramic bowls, soft morning atmosphere, shallow depth of field",
+  "out": "assets/showcase/codex/hero.webp",
+  "size": "640x480"
+ },
+ {
+  "prompt": "abstract macro close-up of handmade paper texture, warm ivory and sand tones, subtle fibers, soft even lighting, minimalist, low contrast",
+  "out": "assets/showcase/codex/texture.webp",
+  "size": "640x480"
+ },
+ {
+  "prompt": "flat minimalist illustration of a paper airplane looping upward leaving a dotted trail, two-tone terracotta and cream, simple geometric shapes, solid off-white background",
+  "out": "assets/showcase/codex/illustration.webp",
+  "size": "640x480"
+ },
+ {
+  "prompt": "bold minimal product composition of a single terracotta ceramic bowl centered on a warm cream background, soft studio lighting, generous negative space",
+  "out": "assets/showcase/codex/product.webp",
+  "size": "640x480"
+ }
+]

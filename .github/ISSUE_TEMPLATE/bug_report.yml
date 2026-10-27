@@ -1,0 +1,29 @@
+name: Bug report
+description: Something went wrong generating an image
+labels: [bug]
+body:
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options: [codex, local, openai, gemini, replicate, not sure]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command or request, and the error you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Doctor output
+      description: Paste the output of `python3 <skill dir>/scripts/doctor.py`.
+      render: text
+  - type: input
+    id: agent
+    attributes:
+      label: Agent
+      placeholder: Claude Code 2.x, Codex, Cursor…
